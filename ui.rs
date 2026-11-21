@@ -450,16 +450,16 @@ fn PageMain() -> impl IntoView {
                     {nav_row("user",
                         move || ctx.me.get().map(|m| m.name).unwrap_or_else(|| "Войти в аккаунт".into()),
                         move || if ctx.me.get().is_some() { String::new() } else { "Не выполнен".into() },
-                        move || ctx.page.set(Page::Acc))}
+                        move || ctx.open_page(Page::Acc))}
                 </div>
 
                 <h3>"ИИ"</h3>
                 <div class="grp">
-                    {nav_row("ai", || "Персональный ИИ".into(), move || name(ctx), move || ctx.page.set(Page::Ai))}
+                    {nav_row("ai", || "Персональный ИИ".into(), move || name(ctx), move || ctx.open_page(Page::Ai))}
                 </div>
 
                 <h3>"Подписка"</h3>
-                <div class="grp">{nav_row("lock", || "Тарифы".into(), move || model_name(ctx), move || ctx.page.set(Page::Plan))}</div>
+                <div class="grp">{nav_row("lock", || "Тарифы".into(), move || model_name(ctx), move || ctx.open_page(Page::Plan))}</div>
 
                 <h3>"Настройки"</h3>
                 <div class="grp">
@@ -496,7 +496,7 @@ fn PageMain() -> impl IntoView {
 
                 <h3>"Поддержка"</h3>
                 <div class="grp">
-                    {nav_row("info", || "О приложении".into(), || String::new(), move || ctx.page.set(Page::About))}
+                    {nav_row("info", || "О приложении".into(), || String::new(), move || ctx.open_page(Page::About))}
                     {act_row("reset", "Сбросить настройки", true, armed, move || {
                         ctx.cfg.set(Cfg::default());
                         ctx.set_pal(0);
@@ -513,7 +513,7 @@ fn PageAi() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     view! {
         <section class=pgc(ctx, Page::Ai)>
-            {ph(ctx, || "Персональный ИИ".into(), move || ctx.page.set(Page::Main))}
+            {ph(ctx, || "Персональный ИИ".into(), move || ctx.open_page(Page::Main))}
             <div class="sc">
                 <div class="fl">"Шаблоны"</div>
                 <div class="pre">
@@ -586,7 +586,7 @@ fn PageAcc() -> impl IntoView {
 
     view! {
         <section class=pgc(ctx, Page::Acc)>
-            {ph(ctx, || "Аккаунт".into(), move || ctx.page.set(Page::Main))}
+            {ph(ctx, || "Аккаунт".into(), move || ctx.open_page(Page::Main))}
             <div class="sc">
                 {move || match ctx.me.get() {
                     Some(me) => view! {
@@ -645,7 +645,7 @@ fn PagePlan() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     view! {
         <section class=pgc(ctx, Page::Plan)>
-            {ph(ctx, || "Тарифы".into(), move || ctx.page.set(Page::Main))}
+            {ph(ctx, || "Тарифы".into(), move || ctx.open_page(Page::Main))}
             <div class="sc">
                 {data().models.iter().enumerate().map(|(k, m)| {
                     let feats = data().feat[k].clone();
@@ -681,7 +681,7 @@ fn PageAbout() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     view! {
         <section class=pgc(ctx, Page::About)>
-            {ph(ctx, || "О приложении".into(), move || ctx.page.set(Page::Main))}
+            {ph(ctx, || "О приложении".into(), move || ctx.open_page(Page::Main))}
             <div class="sc">
                 <div class="grp">
                     <div class="row"><span class="rt">"Версия"</span><span class="rv">"2.0 (Rust)"</span></div>
@@ -700,7 +700,7 @@ fn PageDoc() -> impl IntoView {
         <section class=pgc(ctx, Page::Doc)>
             {ph(ctx,
                 move || data().docs.get(&ctx.doc.get()).map(|d| d.h.clone()).unwrap_or_default(),
-                move || ctx.page.set(ctx.doc_from.get_untracked()))}
+                move || ctx.open_page(ctx.doc_from.get_untracked()))}
             <div class="sc">
                 {move || data().docs.get(&ctx.doc.get()).map(|d| view! {
                     <div class="prof">
