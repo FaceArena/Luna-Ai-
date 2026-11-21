@@ -524,8 +524,26 @@ Deno.serve(async (req: Request) => {
         return text(502, "Не удалось сохранить выбор тарифа.");
       }
       const subscription = await resolveSubscription(admin, updatedUserData.user, rawPlan);
-      if (subscription.error) return text(503, "Не удалось проверить доступ к тарифу. Попробуйте позже.");
-      return new Response(null, { status: 204, headers: cors });
+      if (subscription.error || !subscription.verified) {
+        return text(503, "Не удалось проверить доступ к тарифу. Попробуйте позже.");
+      }
+      const channelMember = rawPlan > 0
+        ? subscription.member
+        : (await isLunaChannelMember(admin, updatedUserData.user)) === true;
+      const effectiveUser = {
+        ...updatedUserData.user,
+        app_metadata: {
+          ...(updatedUserData.user.app_metadata ?? {}),
+          subscription_tier: subscription.tier,
+        },
+      };
+      // Return the verified state in the same round trip. Avoid a second /api/me
+      // request racing with the metadata update and restoring a stale plan.
+      return json(200, {
+        plan: subscription.plan,
+        channel_member: channelMember,
+        prompt_limit: promptLimit(effectiveUser),
+      });
     }
 
     if (path === "/api/provider-settings") return text(404, "Маршрут не найден.");

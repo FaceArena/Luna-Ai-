@@ -1,4 +1,4 @@
-use crate::state::{Chat, Cfg, Me, Memory};
+use crate::state::{Chat, Cfg, Me, Memory, PlanState};
 use gloo_net::http::Request;
 
 pub async fn me() -> Option<Me> {
@@ -65,14 +65,15 @@ pub async fn del_all() {
     let _ = Request::delete("/api/chats").send().await;
 }
 
-pub async fn set_plan(plan: usize) -> Result<(), String> {
+pub async fn set_plan(plan: usize) -> Result<PlanState, String> {
     let request = Request::put("/api/plan")
         .json(&serde_json::json!({ "plan": plan }))
         .map_err(|_| "Не удалось подготовить запрос.".to_string())?;
     let response = request.send().await
         .map_err(|_| "Не удалось связаться с сервером.".to_string())?;
     if response.ok() {
-        Ok(())
+        response.json().await
+            .map_err(|_| "Сервер вернул некорректный статус тарифа.".to_string())
     } else {
         let status = response.status();
         let detail = response.text().await.unwrap_or_default();

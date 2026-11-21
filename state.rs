@@ -66,6 +66,15 @@ pub struct Me {
     pub prompt_limit: usize,
 }
 
+#[derive(Clone, PartialEq, Deserialize)]
+pub struct PlanState {
+    pub plan: usize,
+    #[serde(default)]
+    pub channel_member: bool,
+    #[serde(default = "default_prompt_limit")]
+    pub prompt_limit: usize,
+}
+
 fn default_prompt_limit() -> usize { 100 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
@@ -142,6 +151,7 @@ pub struct Ctx {
     pub mi: RwSignal<usize>,
     pub model_preview: RwSignal<usize>,
     pub busy: RwSignal<bool>,
+    pub plan_busy: RwSignal<bool>,
     pub me: RwSignal<Option<Me>>,
     pub chats: RwSignal<Vec<Chat>>,
     pub cur: RwSignal<Option<i64>>,
@@ -176,6 +186,7 @@ impl Ctx {
             mi: create_rw_signal(mi),
             model_preview: create_rw_signal(mi),
             busy: create_rw_signal(false),
+            plan_busy: create_rw_signal(false),
             me: create_rw_signal(None),
             chats: create_rw_signal(vec![]),
             cur: create_rw_signal(None),
@@ -315,7 +326,7 @@ impl Ctx {
     }
 
     pub fn set_model(self, i: usize) {
-        if i > 2 || self.mi.get_untracked() == i {
+        if i > 2 || self.mi.get_untracked() == i || self.plan_busy.get_untracked() {
             return;
         }
         let Some(_) = self.me.get_untracked() else {
@@ -324,38 +335,37 @@ impl Ctx {
                 self.open_sheet(Page::Acc);
             } else {
                 self.mi.set(0);
+                self.model_preview.set(0);
                 ls_set("luna-model2", "0");
             }
             return;
         };
+
+        // Optimistic UI: switch immediately, then reconcile with the server.
+        // The plan endpoint returns the verified membership in the same request.
         let previous = self.mi.get_untracked();
+        self.plan_busy.set(true);
+        self.mi.set(i);
+        self.model_preview.set(i);
         spawn_local(async move {
             match api::set_plan(i).await {
-                Ok(()) => {
-                    self.mi.set(i);
-                    self.model_preview.set(i);
-                    ls_set("luna-model2", &i.to_string());
-                    // Do not invent membership state on the client. Re-read the
-                    // server-authoritative plan and Telegram membership immediately.
-                    if let Some(me) = api::me().await {
-                        let verified_plan = me.plan.min(2);
-                        self.mi.set(verified_plan);
-                        self.model_preview.set(verified_plan);
-                        ls_set("luna-model2", &verified_plan.to_string());
-                        self.me.set(Some(me));
-                    } else {
-                        // Keep locks visible until the server confirms membership.
-                        self.me.update(|m| {
-                            if let Some(m) = m {
-                                m.plan = i;
-                                m.channel_member = false;
-                            }
-                        });
-                    }
+                Ok(result) => {
+                    let verified_plan = result.plan.min(2);
+                    self.mi.set(verified_plan);
+                    self.model_preview.set(verified_plan);
+                    ls_set("luna-model2", &verified_plan.to_string());
+                    self.me.update(|current| {
+                        if let Some(me) = current {
+                            me.plan = verified_plan;
+                            me.channel_member = result.channel_member;
+                            me.prompt_limit = result.prompt_limit;
+                        }
+                    });
                 }
                 Err(message) => {
                     self.mi.set(previous);
                     self.model_preview.set(previous);
+                    ls_set("luna-model2", &previous.to_string());
                     let notice = if message.contains("403") || message.contains("подпишитесь") {
                         "Премиум доступен только подписчикам Telegram-канала Luna AI."
                     } else {
@@ -364,6 +374,7 @@ impl Ctx {
                     self.say(notice);
                 }
             }
+            self.plan_busy.set(false);
         });
     }
 
