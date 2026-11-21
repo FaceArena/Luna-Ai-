@@ -21,6 +21,41 @@ pub struct Cfg {
     pub fs: String,
     pub keep: bool,
     pub glass: u32,
+    pub lab: LabConfig,
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct LabConfig {
+    pub personas: Vec<LabPersona>,
+    pub presets: Vec<LabPreset>,
+    pub lorebooks: Vec<LabLorebook>,
+    pub active_preset: Option<String>,
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub struct LabPersona {
+    pub id: String,
+    pub name: String,
+    pub who: String,
+    pub rules: String,
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub struct LabPreset {
+    pub id: String,
+    pub name: String,
+    pub len: String,
+    pub instructions: String,
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub struct LabLorebook {
+    pub id: String,
+    pub name: String,
+    pub keywords: Vec<String>,
+    pub content: String,
+    pub enabled: bool,
 }
 impl Default for Cfg {
     fn default() -> Self {
@@ -35,6 +70,7 @@ impl Default for Cfg {
             fs: "m".into(),
             keep: true,
             glass: 100,
+            lab: LabConfig::default(),
         }
     }
 }
@@ -108,6 +144,7 @@ pub enum Page {
     Acc,
     Plan,
     Memory,
+    Lab,
     About,
     Doc,
 }
@@ -579,9 +616,25 @@ impl Ctx {
         let cfg = self.cfg.get_untracked();
         let h = self.hist.get_untracked();
         let skip = h.len().saturating_sub(20);
+        let last_message = h.iter().rev().find(|m| m.role == "user").map(|m| m.content.to_lowercase()).unwrap_or_default();
+        let lore_context = cfg.lab.lorebooks.iter()
+            .filter(|book| book.enabled && book.keywords.iter().any(|keyword| {
+                let keyword = keyword.trim().to_lowercase();
+                !keyword.is_empty() && last_message.contains(&keyword)
+            }))
+            .take(5)
+            .map(|book| format!("[{}]\\n{}", book.name, book.content))
+            .collect::<Vec<_>>()
+            .join("\\n\\n")
+            .chars().take(8000).collect::<String>();
+        let preset_context = cfg.lab.active_preset.as_ref()
+            .and_then(|id| cfg.lab.presets.iter().find(|preset| &preset.id == id))
+            .map(|preset| preset.instructions.chars().take(2000).collect::<String>())
+            .unwrap_or_default();
         let body = serde_json::json!({
             "msgs": &h[skip..], "chat_id": self.cur.get_untracked(), "name": cfg.name, "who": cfg.who,
-            "rules": cfg.rules, "len": cfg.len, "you": cfg.you, "keep": cfg.keep
+            "rules": cfg.rules, "len": cfg.len, "you": cfg.you, "keep": cfg.keep,
+            "lore_context": lore_context, "preset_context": preset_context
         });
         const ERR: &str = "Не удалось получить ответ. Отправьте сообщение ещё раз.";
 
