@@ -56,6 +56,7 @@ pub struct Chat {
 pub struct Me {
     pub name: String,
     pub email: String,
+    #[serde(default)]
     pub plan: usize,
 }
 
