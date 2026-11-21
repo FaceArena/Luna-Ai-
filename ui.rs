@@ -378,8 +378,11 @@ fn sel_row(
 
 fn tog_row(icn: &'static str, t: &'static str, get: impl Fn() -> bool + Copy + 'static, toggle: impl Fn() + 'static) -> impl IntoView {
     view! {
-        <div class="row" on:click=move |_| toggle()>
-            {ic(icn)}<span class="rt">{t}</span><span class="tg" class:on=get></span>
+        <div class="row">
+            {ic(icn)}<span class="rt">{t}</span>
+            <button class="tg" type="button" role="switch" aria-label=t
+                    aria-checked=move || if get() { "true" } else { "false" }
+                    class:on=get on:click=move |_| toggle()></button>
         </div>
     }
 }
@@ -782,6 +785,19 @@ fn row_view(ctx: Ctx, r: Row) -> View {
 fn Log() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     let anim = create_rw_signal(None::<usize>);
+    let last_model = create_rw_signal(ctx.mi.get_untracked());
+    create_effect(move |_| {
+        let selected = ctx.mi.get();
+        if selected != last_model.get_untracked() {
+            last_model.set(selected);
+            anim.set(Some(selected));
+            set_timeout(move || {
+                if anim.get_untracked() == Some(selected) {
+                    anim.set(None);
+                }
+            }, Duration::from_millis(1100));
+        }
+    });
     let streaming = create_memo(move |_| ctx.stream.with(|s| s.is_some()));
     let blank = create_memo(move |_| ctx.stream.with(|s| s.as_ref().map_or(true, |t| t.is_empty())));
     let empty = create_memo(move |_| ctx.log.with(|l| l.is_empty()) && !streaming.get());
