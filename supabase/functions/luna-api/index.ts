@@ -586,26 +586,26 @@ Deno.serve(async (req: Request) => {
         keep: body.keep !== false,
         glass: Math.max(0, Math.min(100, Number(body.glass) || 0)),
         lab: {
-          personas: Array.isArray(labInput?.personas) ? body.lab.personas.slice(0, 20).map((item: any) => ({
+          personas: Array.isArray(labInput?.personas) ? labInput.personas.slice(0, 20).map((item: any) => ({
             id: String(item?.id ?? "").slice(0, 80),
             name: String(item?.name ?? "").trim().slice(0, 60),
             who: String(item?.who ?? "").slice(0, 3000),
             rules: String(item?.rules ?? "").slice(0, 3000),
           })).filter((item: any) => item.id && item.name) : [],
-          presets: Array.isArray(labInput?.presets) ? body.lab.presets.slice(0, 20).map((item: any) => ({
+          presets: Array.isArray(labInput?.presets) ? labInput.presets.slice(0, 20).map((item: any) => ({
             id: String(item?.id ?? "").slice(0, 80),
             name: String(item?.name ?? "").trim().slice(0, 60),
             len: ["short", "normal", "long"].includes(item?.len) ? item.len : "normal",
             instructions: String(item?.instructions ?? "").slice(0, 1200),
           })).filter((item: any) => item.id && item.name) : [],
-          lorebooks: Array.isArray(labInput?.lorebooks) ? body.lab.lorebooks.slice(0, 20).map((item: any) => ({
+          lorebooks: Array.isArray(labInput?.lorebooks) ? labInput.lorebooks.slice(0, 20).map((item: any) => ({
             id: String(item?.id ?? "").slice(0, 80),
             name: String(item?.name ?? "").trim().slice(0, 60),
             keywords: Array.isArray(item?.keywords) ? item.keywords.slice(0, 20).map((word: unknown) => String(word).trim().slice(0, 50)).filter(Boolean) : [],
             content: String(item?.content ?? "").slice(0, 4000),
             enabled: item?.enabled === true,
           })).filter((item: any) => item.id && item.name && item.content) : [],
-          active_preset: typeof labInput?.active_preset === "string" ? body.lab.active_preset.slice(0, 80) : null,
+          active_preset: typeof labInput?.active_preset === "string" ? labInput.active_preset.slice(0, 80) : null,
         },
       };
       const { error } = await userClient.from("luna_personal_settings").upsert({
