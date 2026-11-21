@@ -150,6 +150,9 @@ fn globals(ctx: Ctx) {
                 let layout_h = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(height);
                 let input_focused = document().active_element().map_or(false, |el| el.id() == "inp");
                 let keyboard_open = input_focused && height < layout_h - 80.0;
+                let was_at_bottom = document().get_element_by_id("log").map_or(true, |el| {
+                    el.scroll_height() - el.scroll_top() - el.client_height() <= 80
+                });
 
                 let st = root.style();
                 if keyboard_open {
@@ -161,6 +164,14 @@ fn globals(ctx: Ctx) {
                 }
                 let _ = root.class_list().toggle_with_force("keyboard-open", keyboard_open);
 
+                // Preserve the user's pinned position only when keyboard geometry changes.
+                if keyboard_open && was_at_bottom {
+                    request_animation_frame(move || {
+                        if let Some(el) = document().get_element_by_id("log") {
+                            el.set_scroll_top(el.scroll_height());
+                        }
+                    });
+                }
             }
         });
         update();
@@ -170,6 +181,19 @@ fn globals(ctx: Ctx) {
         });
         let _ = vv.add_event_listener_with_callback("resize", fit.as_ref().unchecked_ref());
         fit.forget();
+
+        // Visual viewport can pan without resizing; refresh only its offset, never chat scroll.
+        let offset = Closure::<dyn FnMut()>::new({
+            let root = root.clone();
+            let vv = vv.clone();
+            move || {
+                if root.class_list().contains("keyboard-open") {
+                    let _ = root.style().set_property("--vvt", &format!("{}px", vv.offset_top().max(0.0)));
+                }
+            }
+        });
+        let _ = vv.add_event_listener_with_callback("scroll", offset.as_ref().unchecked_ref());
+        offset.forget();
 
         // iOS may omit the final viewport resize when the keyboard closes.
         let resync = {
