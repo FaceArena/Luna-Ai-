@@ -20,6 +20,7 @@ function sessionCookie(token: string) {
   return `luna_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=3600`;
 }
 const clearCookie = "luna_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0";
+const chatRateLimits = new Map<string, number[]>();
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -67,7 +68,12 @@ Deno.serve(async (req: Request) => {
     }
 
     if (method === "POST" && path === "/api/logout") {
-      if (userClient) await userClient.auth.signOut().catch(() => undefined);
+      if (token) {
+        await fetch(`${base}/auth/v1/logout`, {
+          method: "POST",
+          headers: { apikey: anon, Authorization: `Bearer ${token}` },
+        }).catch(() => undefined);
+      }
       return new Response(null, { status: 204, headers: { ...cors, "Set-Cookie": clearCookie } });
     }
 
@@ -170,6 +176,11 @@ Deno.serve(async (req: Request) => {
     }
 
     if (path === "/api/chat" && method === "POST") {
+      const now = Date.now();
+      const recent = (chatRateLimits.get(user.id) ?? []).filter((at) => now - at < 60_000);
+      if (recent.length >= 12) return text(429, "Слишком много сообщений. Подождите минуту.");
+      recent.push(now);
+      chatRateLimits.set(user.id, recent);
       const body = await req.json();
       const messages = Array.isArray(body.msgs) ? body.msgs : [];
       if (!messages.length || messages.length > 20 || messages.some((m: any) =>
