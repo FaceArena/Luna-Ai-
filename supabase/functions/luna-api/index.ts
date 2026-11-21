@@ -116,10 +116,21 @@ const promptLimit = (user: any) => {
 type SubscriptionTier = "free" | "luna" | "luna_pro";
 const membershipCache = new Map<string, { member: boolean; checkedAt: number }>();
 
-async function isLunaChannelMember(user: any): Promise<boolean> {
-  const telegramId = String(user?.user_metadata?.sub ?? "");
+async function isLunaChannelMember(admin: any, user: any): Promise<boolean> {
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
-  if (!botToken || !new RegExp("^\\d{5,20}$").test(telegramId)) return false;
+  if (!botToken || !user?.id) return false;
+
+  // Read the Telegram subject from Supabase's trusted identity record.
+  // user_metadata is user-editable and must never be used for authorization.
+  const { data: adminData, error: adminError } = await admin.auth.admin.getUserById(user.id);
+  if (adminError || !adminData?.user) return false;
+  const identities = Array.isArray(adminData.user.identities) ? adminData.user.identities : [];
+  const telegramIdentity = identities.find((identity: any) =>
+    identity?.provider === "custom:telegram" || identity?.provider === "telegram"
+  );
+  const telegramId = String(telegramIdentity?.identity_data?.sub ?? "");
+  if (!/^\\d{5,20}$/.test(telegramId)) return false;
+
   const cached = membershipCache.get(telegramId);
   if (cached && Date.now() - cached.checkedAt < (cached.member ? 60_000 : 15_000)) return cached.member;
   try {
@@ -145,7 +156,7 @@ async function isLunaChannelMember(user: any): Promise<boolean> {
 async function resolveSubscription(admin: any, user: any, requestedPlan?: number) {
   const rawPlan = Number(requestedPlan ?? user?.user_metadata?.plan ?? 0);
   const selectedPlan = Number.isInteger(rawPlan) && rawPlan >= 0 && rawPlan <= 2 ? rawPlan : 0;
-  const member = selectedPlan > 0 ? await isLunaChannelMember(user) : false;
+  const member = selectedPlan > 0 ? await isLunaChannelMember(admin, user) : false;
   const plan = member ? selectedPlan : 0;
   const tier: SubscriptionTier = plan === 2 ? "luna_pro" : plan === 1 ? "luna" : "free";
   const currentTier = String(user?.app_metadata?.subscription_tier ?? "free");
@@ -399,7 +410,7 @@ Deno.serve(async (req: Request) => {
       const body = await req.json().catch(() => null);
       const rawPlan = Number(body?.plan);
       if (!Number.isInteger(rawPlan) || rawPlan < 0 || rawPlan > 2) return text(400, "Некорректный тариф.");
-      if (rawPlan > 0 && !(await isLunaChannelMember(user)))
+      if (rawPlan > 0 && !(await isLunaChannelMember(admin, user)))
         return text(403, "Для доступа к премиум-моделям подпишитесь на Telegram-канал Luna AI.");
       const { data, error } = await userClient.auth.updateUser({ data: { plan: rawPlan } });
       if (error || !data.user) return text(502, "Не удалось сохранить выбор тарифа.");
