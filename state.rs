@@ -54,13 +54,19 @@ pub struct Chat {
 
 #[derive(Clone, PartialEq, Deserialize)]
 pub struct Me {
+    #[serde(default)]
+    pub id: String,
     pub name: String,
     pub email: String,
     #[serde(default)]
     pub plan: usize,
+    #[serde(default = "default_prompt_limit")]
+    pub prompt_limit: usize,
 }
 
-/// Строка в ленте. fx: 0 — обычный текст, 1 — «стоп», 2 — «лимит».
+fn default_prompt_limit() -> usize { 100 }
+
+/// Строка в ленте. fx: 0 — обычный текст, 1 — «стоп», 2 — «лимит», 3 — «лимит промта».
 #[derive(Clone, PartialEq)]
 pub struct Row {
     pub id: u64,
@@ -114,6 +120,7 @@ fn pick(a: &[String]) -> String {
 #[derive(Clone, Copy)]
 pub struct Ctx {
     pub cfg: RwSignal<Cfg>,
+    pub cfg_sync: RwSignal<bool>,
     pub pal: RwSignal<usize>,
     pub mi: RwSignal<usize>,
     pub busy: RwSignal<bool>,
@@ -145,6 +152,7 @@ impl Ctx {
         let mi = ls_get("luna-model2").and_then(|s| s.parse().ok()).unwrap_or(0usize).min(2);
         Self {
             cfg: create_rw_signal(cfg),
+            cfg_sync: create_rw_signal(false),
             pal: create_rw_signal(pal),
             mi: create_rw_signal(mi),
             busy: create_rw_signal(false),
@@ -219,6 +227,14 @@ impl Ctx {
                 move || {
                     if gen.get_value() == me {
                         ls_set("luna-cfg", &serde_json::to_string(&c).unwrap_or_default());
+                        if self.cfg_sync.get_untracked() && self.me.get_untracked().is_some() {
+                            let cfg = c.clone();
+                            let limit = self.me.get_untracked().map(|m| m.prompt_limit).unwrap_or(100);
+                            let words = cfg.who.split_whitespace().count() + cfg.rules.split_whitespace().count();
+                            if words <= limit {
+                                spawn_local(async move { let _ = api::put_personal_settings(&cfg).await; });
+                            }
+                        }
                     }
                 },
                 Duration::from_millis(300),
@@ -305,19 +321,36 @@ impl Ctx {
     pub fn finish_login(self, me: Me) {
         self.mi.set(me.plan.min(2));
         ls_set("luna-model2", &self.mi.get_untracked().to_string());
-        if self.cfg.get_untracked().you.is_empty() {
-            let n = me.name.clone();
-            self.cfg.update(|c| c.you = n);
-        }
-        self.me.set(Some(me));
+        self.cfg_sync.set(false);
+        self.me.set(Some(me.clone()));
         spawn_local(async move {
+            match api::get_personal_settings().await {
+                Ok(remote) => {
+                    let is_new = remote.is_none();
+                    let owner = ls_get("luna-cfg-owner");
+                    let local = self.cfg.get_untracked();
+                    let mut cfg = match remote {
+                        Some(saved) => saved,
+                        None if owner.as_deref().map_or(true, |id| id == me.id) => local,
+                        None => Cfg::default(),
+                    };
+                    if cfg.you.is_empty() { cfg.you = me.name.clone(); }
+                    self.cfg.set(cfg.clone());
+                    ls_set("luna-cfg-owner", &me.id);
+                    self.cfg_sync.set(true);
+                    if is_new { let _ = api::put_personal_settings(&cfg).await; }
+                }
+                Err(_) => self.say("Не удалось загрузить персональные настройки. Они пока останутся на этом устройстве."),
+            }
             self.chats.set(api::chats().await);
         });
     }
 
     pub fn logout(self) {
         spawn_local(api::logout());
+        self.cfg_sync.set(false);
         self.me.set(None);
+        self.cfg.set(Cfg::default());
         self.chats.set(vec![]);
         self.reset_view();
     }
