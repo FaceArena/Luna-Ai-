@@ -51,15 +51,17 @@ pub fn App() -> impl IntoView {
     ctx.wire();
     globals(ctx);
     view! {
-        <Header/>
-        <PalPop/>
-        <ModelPop/>
-        <div class="scrim" class:on=move || ctx.drawer.get() || ctx.sheet.get() on:click=move |_| ctx.close_all()></div>
-        <div class="glass toast" class:on=move || ctx.toast_on.get() role="status">{move || ctx.toast.get()}</div>
-        <Drawer/>
-        <Sheet/>
-        <Log/>
-        <Composer/>
+        <div id="app">
+            <Header/>
+            <PalPop/>
+            <ModelPop/>
+            <div class="scrim" class:on=move || ctx.drawer.get() || ctx.sheet.get() on:click=move |_| ctx.close_all()></div>
+            <div class="glass toast" class:on=move || ctx.toast_on.get() role="status">{move || ctx.toast.get()}</div>
+            <Drawer/>
+            <Sheet/>
+            <Log/>
+            <Composer/>
+        </div>
     }
 }
 
@@ -148,23 +150,27 @@ fn globals(ctx: Ctx) {
         let _ = r.class_list().toggle_with_force("paused", document().hidden());
     });
 
-    // клавиатура на iOS: высота = видимая область
+    // iOS Safari: размер и вертикальное смещение видимой области.
     if let Some(vv) = window().visual_viewport() {
-        let v2 = vv.clone();
-        let fit = Closure::<dyn FnMut()>::new(move || {
-            let h = format!("{}px", v2.height());
-            let st = root.style();
-            if st.get_property_value("height").unwrap_or_default() != h {
-                let _ = st.set_property("height", &h);
+        let update_viewport = {
+            let root = root.clone();
+            let vv = vv.clone();
+            move || {
+                let _ = root.style().set_property("--vvh", &format!("{}px", vv.height()));
+                let _ = root.style().set_property("--vvt", &format!("{}px", vv.offset_top()));
+                if window().scroll_y().unwrap_or(0.0) != 0.0 {
+                    window().scroll_to_with_x_and_y(0.0, 0.0);
+                }
             }
-            if window().scroll_y().unwrap_or(0.0) != 0.0 {
-                window().scroll_to_with_x_and_y(0.0, 0.0);
-            }
-            ctx.scroll(false);
-        });
+        };
+        update_viewport();
+        let fit = Closure::<dyn FnMut()>::new(update_viewport);
         let _ = vv.add_event_listener_with_callback("resize", fit.as_ref().unchecked_ref());
         let _ = vv.add_event_listener_with_callback("scroll", fit.as_ref().unchecked_ref());
         fit.forget();
+    } else {
+        let _ = root.style().set_property("--vvh", "100vh");
+        let _ = root.style().set_property("--vvt", "0px");
     }
 }
 
@@ -869,7 +875,19 @@ fn Composer() -> impl IntoView {
                           on:keydown=move |e: web_sys::KeyboardEvent| {
                               if e.key() == "Enter" && !e.shift_key() && !coarse() { e.prevent_default(); go(); }
                           }
-                          on:focus=move |_| request_animation_frame(move || ctx.scroll(false))></textarea>
+                          on:focus=move |_| {
+                              let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
+                              set_timeout(move || {
+                                  let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
+                              }, Duration::from_millis(100));
+                              request_animation_frame(move || ctx.scroll(false));
+                          }
+                          on:blur=move |_| {
+                              let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
+                              set_timeout(move || {
+                                  let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
+                              }, Duration::from_millis(100));
+                          }></textarea>
                 <button class="glass send" id="send"
                         aria-label=move || if ctx.busy.get() { "Стоп" } else { "Отправить" }
                         disabled=move || !ctx.busy.get() && draft.get().trim().is_empty()
