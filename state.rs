@@ -625,6 +625,7 @@ impl Ctx {
         self.busy.set(true);
         self.stream.set(Some(String::new()));
         self.scroll(true);
+        let paid_model = self.mi.get_untracked() > 0;
 
         let my = self.run.get_value() + 1;
         self.run.set_value(my);
@@ -712,8 +713,8 @@ impl Ctx {
             let mut shown = 0usize;
             const CHUNKS: [usize; 6] = [3, 4, 4, 5, 3, 4];
 
-            // Start the typing phase one second after the reply bubble appears.
-            gloo_timers::future::TimeoutFuture::new(450).await;
+            // Paid models skip most of the artificial pre-stream pause.
+            gloo_timers::future::TimeoutFuture::new(if paid_model { 120 } else { 450 }).await;
             if self.run.get_value() != my {
                 return;
             }
@@ -740,7 +741,7 @@ impl Ctx {
                     let visible: String = chars[..shown].iter().collect();
                     self.stream.set(Some(visible));
                     self.scroll(false);
-                    gloo_timers::future::TimeoutFuture::new(60).await;
+                    gloo_timers::future::TimeoutFuture::new(if paid_model { 24 } else { 60 }).await;
                 }
             }
             if self.run.get_value() != my {
