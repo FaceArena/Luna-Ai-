@@ -678,7 +678,7 @@ impl Ctx {
             };
             match resp.status() {
                 402 => return self.fail("Инструкции персонального ИИ превышают лимит бесплатной версии. Сократите их или посмотрите доступные тарифы.".to_string(), 3),
-                413 => return self.fail("Изображение слишком большое. Выберите фото до 3 МБ.", 0),
+                413 => return self.fail("Изображение слишком большое. Выберите фото до 3 МБ.".to_string(), 0),
                 429 => return self.fail(pick(&data().tpl_limit), 2),
                 401 => {
                     self.me.set(None);
