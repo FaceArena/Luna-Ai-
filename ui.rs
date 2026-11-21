@@ -555,7 +555,7 @@ fn PageAi() -> impl IntoView {
 fn PageProviders() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     let provider = create_rw_signal("groq".to_string());
-    let model = create_rw_signal("llama-3.3-70b-versatile".to_string());
+    let model = create_rw_signal("openai/gpt-oss-120b".to_string());
     let key = create_rw_signal(String::new());
     let configured = create_rw_signal(false);
     let status = create_rw_signal(String::new());
@@ -572,10 +572,10 @@ fn PageProviders() -> impl IntoView {
                                 provider.set(active.clone());
                                 if let Some(rows) = data.get("providers").and_then(|v| v.as_array()) {
                                     if let Some(row) = rows.iter().find(|row| row.get("provider").and_then(|v| v.as_str()) == Some(active.as_str())) {
-                                        model.set(row.get("model").and_then(|v| v.as_str()).unwrap_or("llama-3.3-70b-versatile").to_string());
+                                        model.set(row.get("model").and_then(|v| v.as_str()).unwrap_or("openai/gpt-oss-120b").to_string());
                                         configured.set(row.get("configured").and_then(|v| v.as_bool()).unwrap_or(false));
                                     } else {
-                                        model.set(if active == "gemini" { "gemini-2.5-flash" } else { "llama-3.3-70b-versatile" }.into());
+                                        model.set(if active == "gemini" { "gemini-2.5-flash" } else { "openai/gpt-oss-120b" }.into());
                                         configured.set(false);
                                     }
                                 }
@@ -593,7 +593,7 @@ fn PageProviders() -> impl IntoView {
 
     let select_provider = move |value: String| {
         provider.set(value.clone());
-        model.set(if value == "gemini" { "gemini-2.5-flash" } else { "llama-3.3-70b-versatile" }.into());
+        model.set(if value == "gemini" { "gemini-2.5-flash" } else { "openai/gpt-oss-120b" }.into());
         configured.set(false);
         status.set(String::new());
         spawn_local(async move {
@@ -602,7 +602,7 @@ fn PageProviders() -> impl IntoView {
                     if let Ok(data) = resp.json::<serde_json::Value>().await {
                         if let Some(rows) = data.get("providers").and_then(|v| v.as_array()) {
                             if let Some(row) = rows.iter().find(|row| row.get("provider").and_then(|v| v.as_str()) == Some(value.as_str())) {
-                                model.set(row.get("model").and_then(|v| v.as_str()).unwrap_or(if value == "gemini" { "gemini-2.5-flash" } else { "llama-3.3-70b-versatile" }).to_string());
+                                model.set(row.get("model").and_then(|v| v.as_str()).unwrap_or(if value == "gemini" { "gemini-2.5-flash" } else { "openai/gpt-oss-120b" }).to_string());
                                 configured.set(row.get("configured").and_then(|v| v.as_bool()).unwrap_or(false));
                             }
                         }
@@ -677,7 +677,7 @@ fn PageProviders() -> impl IntoView {
                 <select class="fi" id="provider-model" prop:value=move || model.get()
                     on:change=move |e| model.set(event_target_value(&e))>
                     <Show when=move || provider.get() == "groq">
-                        <option value="llama-3.3-70b-versatile">"Llama 3.3 70B"</option>
+                        <option value="openai/gpt-oss-120b">"GPT OSS 120B"</option>
                         <option value="openai/gpt-oss-120b">"GPT OSS 120B"</option>
                     </Show>
                     <Show when=move || provider.get() == "gemini">
