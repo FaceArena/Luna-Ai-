@@ -550,10 +550,11 @@ fn PageAi() -> impl IntoView {
 }
 
 #[component]
-fn PageProviders() -> impl IntoView {
+fn PageAcc() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
-    let provider = create_rw_signal("groq".to_string());
-    let model = create_rw_signal("openignal(String::new());
+    let up = create_rw_signal(false);
+    let ok = create_rw_signal(false);
+    let err = create_rw_signal(String::new());
     let nm = create_rw_signal(String::new());
     let email = create_rw_signal(String::new());
     let pass = create_rw_signal(String::new());
