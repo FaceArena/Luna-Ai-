@@ -752,8 +752,8 @@ fn PageMemory() -> impl IntoView {
     view! {
         <section class=pgc(ctx, Page::Memory)>
             {ph(ctx, || "Память Luna".into(), move || ctx.open_page(Page::Main))}
-            <div class="sc">
-                <p class="hint" style="margin-bottom:14px">"Здесь хранятся подтверждённые факты о персонажах, отношениях и событиях. Закреплённые записи имеют приоритет. Память можно исправить или удалить."</p>
+            <div class="sc memory-sc">
+                <p class="hint">"Здесь хранятся подтверждённые факты о персонажах, отношениях и событиях. Закреплённые записи имеют приоритет. Память можно исправить или удалить."</p>
                 {move || if ctx.me.get().is_none() {
                     view! { <div class="grp"><p class="hint">"Войдите в аккаунт, чтобы просматривать сохранённую память."</p></div> }.into_view()
                 } else if loading.get() && items.get().is_empty() {
