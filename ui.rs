@@ -753,9 +753,10 @@ fn Log() -> impl IntoView {
     let streaming = create_memo(move |_| ctx.stream.with(|s| s.is_some()));
     let blank = create_memo(move |_| ctx.stream.with(|s| s.as_ref().map_or(true, |t| t.is_empty())));
     let empty = create_memo(move |_| ctx.log.with(|l| l.is_empty()) && !streaming.get());
+    let log_el = ctx.log_el;
 
     view! {
-        <main id="log" node_ref={ctx.log_el}>
+        <main id="log" node_ref=log_el>
             <Show when=move || empty.get()>
                 <div class="empty">
                     <div class="glass big hey" on:click=move |_| {
@@ -794,7 +795,8 @@ fn Composer() -> impl IntoView {
 
     let fit = move || {
         if let Some(t) = ta.get_untracked() {
-            let st = web_sys::HtmlElement::style(&t);
+            let t: web_sys::HtmlTextAreaElement = t.unchecked_into();
+            let st = t.style();
             let _ = st.set_property("height", "auto");
             let h = t.scroll_height().min(140);
             let _ = st.set_property("height", &format!("{h}px"));
