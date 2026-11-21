@@ -327,7 +327,9 @@ body {
 #app {
   position: fixed;
   z-index: 1;
-  inset: 0;
+  top: var(--vvt, 0px);
+  right: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -337,7 +339,9 @@ body {
   overflow: hidden;
   isolation: isolate;
   padding-top: env(safe-area-inset-top, 0px);
-  transition: height .25s cubic-bezier(.22, 1, .36, 1);
+  /* Follow the visual viewport directly; do not animate the whole chat
+     through an intermediate height while iOS is presenting the keyboard. */
+  transition: none;
 }
 #shell {
   display: flex;
