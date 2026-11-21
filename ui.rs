@@ -167,7 +167,7 @@ fn Header() -> impl IntoView {
                 <b><em>{move || name(ctx)}</em>" "<svg viewBox="0 0 24 24" inner_html=DOWN></svg></b>
                 <span>{move || if ctx.busy.get() { "Печатает".to_string() } else { model_name(ctx) }}</span>
             </button>
-            <button class="glass chg" aria-label="Сменить тариф" on:click=move |_| ctx.open_sheet(Page::Plan)>"Сменить"</button>
+            <button class="glass chg" aria-label=move || if ctx.me.get().is_some() { "Сменить тариф" } else { "Войти через Telegram" } on:click=move |_| { if ctx.me.get().is_some() { ctx.open_sheet(Page::Plan) } else { ctx.open_sheet(Page::Acc) } }>{move || if ctx.me.get().is_some() { "Сменить" } else { "Войти" }}</button>
             <button class="glass ib" id="palb" aria-label="Цвета" on:click=move |_| { ctx.msh_open.set(false); ctx.pal_open.update(|v| *v = !*v) }>
                 <span class="orb"></span>
             </button>
@@ -555,57 +555,31 @@ fn PageAi() -> impl IntoView {
 #[component]
 fn PageAcc() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
-    let up = create_rw_signal(false);
-    let ok = create_rw_signal(false);
     let err = create_rw_signal(String::new());
-    let nm = create_rw_signal(String::new());
-    let email = create_rw_signal(String::new());
-    let pass = create_rw_signal(String::new());
     let auth_busy = create_rw_signal(false);
 
-    let info = create_rw_signal(String::new());
-    let go = move || {
+    let start_login = move |_| {
         if auth_busy.get_untracked() {
             return;
         }
-        let (m, p, n) = (email.get_untracked().trim().to_string(), pass.get_untracked(), nm.get_untracked().trim().to_string());
-        let reg = up.get_untracked();
-        if reg && n.is_empty() {
-            return err.set("Введите имя".into());
-        }
-        if reg && n.chars().count() > 40 {
-            return err.set("Имя должно быть не длиннее 40 символов".into());
-        }
-        if m.len() > 254 || !m.contains('@') || !m.rsplit_once('@').map_or(false, |(_, domain)| domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.')) {
-            return err.set("Введите корректную почту".into());
-        }
-        if p.chars().count() < 8 || p.chars().count() > 128 {
-            return err.set("Пароль должен содержать от 8 до 128 символов".into());
-        }
-        if reg && !ok.get_untracked() {
-            return err.set("Подтвердите согласие с условиями".into());
-        }
         err.set(String::new());
-        info.set(String::new());
         auth_busy.set(true);
-        spawn_local(async move {
-            let path = if reg { "/api/register" } else { "/api/login" };
-            let result = api::auth(path, &serde_json::json!({ "name": n, "email": m, "pass": p })).await;
-            auth_busy.set(false);
-            match result {
-                Ok(api::AuthOutcome::SignedIn(me)) => {
-                    pass.set(String::new());
-                    ctx.finish_login(me);
+        let global = js_sys::global();
+        let start = js_sys::Reflect::get(&global, &"lunaTelegramStart".into())
+            .ok()
+            .and_then(|value| value.dyn_into::<js_sys::Function>().ok());
+        match start {
+            Some(function) => {
+                if function.call0(&global).is_err() {
+                    auth_busy.set(false);
+                    err.set("Не удалось открыть Telegram. Попробуйте ещё раз.".into());
                 }
-                Ok(api::AuthOutcome::NeedsEmailConfirmation(address)) => {
-                    pass.set(String::new());
-                    up.set(false);
-                    ok.set(false);
-                    info.set(format!("Аккаунт создан. Подтвердите адрес {} по ссылке из письма, затем войдите.", address));
-                }
-                Err(e) => err.set(e),
             }
-        });
+            None => {
+                auth_busy.set(false);
+                err.set("Модуль входа не загрузился. Обновите страницу.".into());
+            }
+        }
     };
 
     view! {
@@ -616,11 +590,14 @@ fn PageAcc() -> impl IntoView {
                     Some(me) => view! {
                         <div class="prof">
                             <div class="avt">{me.name.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_else(|| "?".into())}</div>
-                            <div><b>{me.name.clone()}</b><span>{me.email.clone()}</span></div>
+                            <div>
+                                <b>{me.name.clone()}</b>
+                                <span>{if me.email.is_empty() { "Telegram".to_string() } else { me.email.clone() }}</span>
+                            </div>
                         </div>
                         <div class="grp" style="margin-top:14px">
                             <div class="row"><span class="rt">"Тариф"</span><span class="rv">{move || model_name(ctx)}</span></div>
-                            <div class="row"><span class="rt">"Способ входа"</span><span class="rv">"Эл. почта"</span></div>
+                            <div class="row"><span class="rt">"Способ входа"</span><span class="rv">"Telegram"</span></div>
                         </div>
                         <button class="fi rst" on:click=move |_| ctx.logout()>"Выйти"</button>
                         <p class="hint">"История чатов хранится на сервере и привязана к аккаунту."</p>
@@ -629,43 +606,20 @@ fn PageAcc() -> impl IntoView {
                         <div class="prof">
                             {move || rb(ctx.mi.get())}
                             <div>
-                                <b>{move || if up.get() { "Создать аккаунт" } else { "Войдите в аккаунт" }}</b>
-                                <span>"Чтобы хранить чаты и писать ИИ"</span>
+                                <b>"Войти в Luna"</b>
+                                <span>"Используйте свой аккаунт Telegram"</span>
                             </div>
                         </div>
-                        <form on:submit=move |e| { e.prevent_default(); go(); }>
-                            <Show when=move || up.get()>
-                                <label class="fl" for="a-name">"Имя"</label>
-                                <input class="fi" id="a-name" maxlength="40" autocomplete="name" prop:value=move || nm.get() on:input=move |e| nm.set(event_target_value(&e))/>
-                            </Show>
-                            <label class="fl" for="a-mail">"Электронная почта"</label>
-                            <input class="fi" id="a-mail" type="email" inputmode="email" autocomplete="email" required placeholder="name@mail.com"
-                                   prop:value=move || email.get() on:input=move |e| email.set(event_target_value(&e))/>
-                            <label class="fl" for="a-pass">"Пароль"</label>
-                            <input class="fi" id="a-pass" type="password" minlength="8" maxlength="128" required
-                                   autocomplete=move || if up.get() { "new-password" } else { "current-password" }
-                                   prop:value=move || pass.get() on:input=move |e| pass.set(event_target_value(&e))/>
-                            <Show when=move || up.get()>
-                                <div class="grp" style="margin-top:14px">
-                                    <label class="row consent-row">
-                                        <input class="consent-check" type="checkbox"
-                                               prop:checked=move || ok.get()
-                                               on:change=move |e| { ok.set(event_target_checked(&e)); err.set(String::new()); }/>
-                                        <span class="rt">"Принимаю условия и политику"</span>
-                                    </label>
-                                    {doc_row(ctx, None, "Условия использования", "terms", Page::Acc)}
-                                    {doc_row(ctx, None, "Политика конфиденциальности", "privacy", Page::Acc)}
-                                    {doc_row(ctx, None, "Согласие на обработку данных", "consent", Page::Acc)}
-                                </div>
-                            </Show>
-                            <p class="err">{move || err.get()}</p>
-                            <p class="hint">{move || info.get()}</p>
-                            <button class="cta" type="submit" disabled=move || auth_busy.get()>{move || if auth_busy.get() { "Подождите…" } else if up.get() { "Создать аккаунт" } else { "Войти" }}</button>
-                            <button class="lnk" type="button" disabled=move || auth_busy.get() on:click=move |_| { err.set(String::new()); info.set(String::new()); ok.set(false); up.update(|v| *v = !*v); }>
-                                {move || if up.get() { "У меня уже есть аккаунт" } else { "Создать аккаунт" }}
-                            </button>
-                            <p class="hint">"Пароль обрабатывается сервером; приложение не хранит его в открытом виде."</p>
-                        </form>
+                        <button class="cta" type="button" disabled=move || auth_busy.get() on:click=start_login>
+                            {move || if auth_busy.get() { "Открываем Telegram…" } else { "Войти через Telegram" }}
+                        </button>
+                        <p class="err">{move || err.get()}</p>
+                        <div class="grp" style="margin-top:14px">
+                            {doc_row(ctx, None, "Условия использования", "terms", Page::Acc)}
+                            {doc_row(ctx, None, "Политика конфиденциальности", "privacy", Page::Acc)}
+                            {doc_row(ctx, None, "Согласие на обработку данных", "consent", Page::Acc)}
+                        </div>
+                        <p class="hint">"Вход выполняется через Telegram. Luna не получает ваш пароль Telegram."</p>
                     }.into_view(),
                 }}
             </div>
