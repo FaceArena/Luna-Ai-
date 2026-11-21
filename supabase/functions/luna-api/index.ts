@@ -51,9 +51,21 @@ Deno.serve(async (req: Request) => {
         return text(400, "Проверьте имя, почту и пароль (8–128 символов).");
       const client = createClient(base, anon, { auth: { persistSession: false, autoRefreshToken: false } });
       const { data, error } = await client.auth.signUp({ email, password, options: { data: { name } } });
-      if (error) return text(400, error.message);
-      if (!data.session) return text(409, "Аккаунт создан. Подтвердите email, затем войдите.");
-      return json(200, { name, email }, { "Set-Cookie": sessionCookie(data.session.access_token) });
+      if (error) {
+        const message = error.message.toLowerCase();
+        if (message.includes("already registered") || message.includes("already been registered")) {
+          return text(409, "Аккаунт с этой почтой уже существует. Войдите.");
+        }
+        if (message.includes("invalid") && message.includes("email")) {
+          return text(400, "Проверьте адрес электронной почты.");
+        }
+        if (message.includes("password")) {
+          return text(400, "Пароль не прошёл проверку безопасности. Используйте более надёжный пароль.");
+        }
+        return text(400, "Не удалось создать аккаунт. Проверьте данные и попробуйте ещё раз.");
+      }
+      if (!data.session) return text(409, "Аккаунт создан. Проверьте почту и подтвердите адрес, затем войдите.");
+      return json(200, { name, email, plan: 0 }, { "Set-Cookie": sessionCookie(data.session.access_token) });
     }
 
     if (method === "POST" && path === "/api/login") {
@@ -64,7 +76,8 @@ Deno.serve(async (req: Request) => {
       });
       if (error || !data.session || !data.user) return text(401, "Неверная почта или пароль.");
       const name = String(data.user.user_metadata?.name ?? "Luna user");
-      return json(200, { name, email: data.user.email ?? "" }, { "Set-Cookie": sessionCookie(data.session.access_token) });
+      const plan = Math.min(2, Number(data.user.user_metadata?.plan ?? 0) || 0);
+      return json(200, { name, email: data.user.email ?? "", plan }, { "Set-Cookie": sessionCookie(data.session.access_token) });
     }
 
     if (method === "POST" && path === "/api/logout") {
