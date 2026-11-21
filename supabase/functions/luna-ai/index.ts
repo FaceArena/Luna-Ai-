@@ -53,7 +53,7 @@ Deno.serve(async (req: Request) => {
       const model = typeof body.model === "string" ? body.model.trim() : "";
       const allowed = provider === "groq"
         ? ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
-        : ["gemini-2.5-flash", "gemini-2.5-pro"];
+        : ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
       if (!allowed.includes(model)) return reply(400, { error: "Unsupported model" });
       const { data: existing, error: readError } = await admin.from("luna_provider_settings")
         .select("user_id").eq("user_id", userId).eq("provider", provider).maybeSingle();
@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
       const model = String(body.model ?? "").trim();
       const allowed = provider === "groq"
         ? ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
-        : ["gemini-2.5-flash", "gemini-2.5-pro"];
+        : ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
       if (!allowed.includes(model)) return reply(400, { error: "Unsupported model" });
       const { data: existing, error: readError } = await admin.from("luna_provider_settings")
         .select("user_id").eq("user_id", userId).eq("provider", provider).maybeSingle();
