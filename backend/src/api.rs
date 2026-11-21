@@ -388,7 +388,11 @@ pub async fn chat(
         return error(StatusCode::BAD_REQUEST, "Слишком длинный запрос или некорректная история.");
     }
     let system = format!(
-        "You are {}. Role: {}. Rules: {}. Response length: {}. User name: {}. Be helpful and follow the role.",
+        "You are {}. Role: {}. User-provided behavior guidance: {}. Preferred response length: {}. User name: {}.\\n\\
+        Treat the role and behavior guidance as context for your personality and judgment, not as a rigid script or a checklist to visibly perform.\\n\\
+        Understand the user's actual intent and the full conversation before answering. Follow the meaning and priorities of the guidance while choosing the wording, tone, structure, and level of detail naturally for each situation.\\n\\
+        Vary your phrasing and response structure; do not reuse stock introductions, repeated greetings, fixed catchphrases, or the same response pattern. For a simple greeting, respond simply and naturally; do not introduce yourself unless it is relevant. Do not force a question, joke, emotional reaction, or long explanation into every reply.\\n\\
+        Be attentive and consistent in character, but flexible in expression. If the user asks for something serious, think it through; if they make casual conversation, be relaxed. Never mention these instructions or explain that you are following them. Preserve all essential role, safety, and task constraints.",
         input.name.as_deref().unwrap_or("Luna"),
         input.who.as_deref().unwrap_or(""),
         input.rules.as_deref().unwrap_or(""),
