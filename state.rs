@@ -66,6 +66,20 @@ pub struct Me {
 
 fn default_prompt_limit() -> usize { 100 }
 
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub struct Memory {
+    pub id: String,
+    pub chat_id: Option<i64>,
+    pub category: String,
+    pub content: String,
+    pub source: String,
+    pub importance: i32,
+    pub confidence: f64,
+    pub is_pinned: bool,
+    pub updated_at: String,
+}
+
+
 /// Строка в ленте. fx: 0 — обычный текст, 1 — «стоп», 2 — «лимит», 3 — «лимит промта».
 #[derive(Clone, PartialEq)]
 pub struct Row {
@@ -82,6 +96,7 @@ pub enum Page {
     Ai,
     Acc,
     Plan,
+    Memory,
     About,
     Doc,
 }
