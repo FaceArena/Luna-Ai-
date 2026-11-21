@@ -496,20 +496,38 @@ impl Ctx {
                 return self.fail(ERR.into(), 0);
             };
             let mut stream = wasm_streams::ReadableStream::from_raw(raw.unchecked_into()).into_stream();
-            let mut buf: Vec<u8> = Vec::new();
+            let mut pending: Vec<u8> = Vec::new();
+            let mut answer = String::new();
+            let mut finished = false;
             while let Some(chunk) = stream.next().await {
                 if self.run.get_value() != my {
                     return;
                 }
                 let Ok(v) = chunk else { break };
-                buf.extend(js_sys::Uint8Array::new(&v).to_vec());
-                self.stream.set(Some(clean(&String::from_utf8_lossy(&buf))));
-                self.scroll(false);
+                pending.extend(js_sys::Uint8Array::new(&v).to_vec());
+                while let Some(pos) = pending.iter().position(|b| *b == b'\\n') {
+                    let mut line: Vec<u8> = pending.drain(..=pos).collect();
+                    while matches!(line.last(), Some(b'\\n' | b'\\r')) { line.pop(); }
+                    let line = String::from_utf8_lossy(&line);
+                    let Some(data) = line.strip_prefix("data:") else { continue };
+                    let data = data.trim();
+                    if data == "[DONE]" {
+                        finished = true;
+                        break;
+                    }
+                    let Ok(event) = serde_json::from_str::<serde_json::Value>(data) else { continue };
+                    if let Some(piece) = event["choices"][0]["delta"]["content"].as_str() {
+                        answer.push_str(piece);
+                        self.stream.set(Some(clean(&answer)));
+                        self.scroll(false);
+                    }
+                }
+                if finished { break; }
             }
             if self.run.get_value() != my {
                 return;
             }
-            let out = clean(String::from_utf8_lossy(&buf).trim());
+            let out = clean(answer.trim());
             if out.is_empty() {
                 return self.fail(ERR.into(), 0);
             }
