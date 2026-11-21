@@ -118,21 +118,36 @@ const membershipCache = new Map<string, { member: boolean; checkedAt: number }>(
 
 async function isLunaChannelMember(admin: any, user: any): Promise<boolean> {
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
-  if (!botToken || !user?.id) return false;
+  if (!botToken || !user?.id) {
+    console.warn("luna membership denied: missing bot token or authenticated user");
+    return false;
+  }
 
   // Read the Telegram subject from Supabase's trusted identity record.
   // user_metadata is user-editable and must never be used for authorization.
   const { data: adminData, error: adminError } = await admin.auth.admin.getUserById(user.id);
-  if (adminError || !adminData?.user) return false;
+  if (adminError || !adminData?.user) {
+    console.error("luna membership identity lookup failed", adminError?.message ?? "user not found");
+    return false;
+  }
   const identities = Array.isArray(adminData.user.identities) ? adminData.user.identities : [];
   const telegramIdentity = identities.find((identity: any) =>
     identity?.provider === "custom:telegram" || identity?.provider === "telegram"
   );
   const telegramId = String(telegramIdentity?.identity_data?.sub ?? "");
-  if (!/^\d{5,20}$/.test(telegramId)) return false;
+  if (!/^\d{5,20}$/.test(telegramId)) {
+    console.warn("luna membership denied: trusted Telegram identity missing or malformed", {
+      identityProviders: identities.map((identity: any) => identity?.provider).filter(Boolean),
+      hasSubject: Boolean(telegramIdentity?.identity_data?.sub),
+    });
+    return false;
+  }
 
   const cached = membershipCache.get(telegramId);
-  if (cached && Date.now() - cached.checkedAt < (cached.member ? 60_000 : 15_000)) return cached.member;
+  if (cached && Date.now() - cached.checkedAt < (cached.member ? 60_000 : 15_000)) {
+    console.info("luna membership cache", { member: cached.member });
+    return cached.member;
+  }
   try {
     const response = await fetch(`https://api.telegram.org/bot${botToken}/getChatMember`, {
       method: "POST",
@@ -140,15 +155,23 @@ async function isLunaChannelMember(admin: any, user: any): Promise<boolean> {
       body: JSON.stringify({ chat_id: "@LunaAiroll", user_id: Number(telegramId) }),
       signal: AbortSignal.timeout(5000),
     });
-    if (!response.ok) return false;
-    const payload = await response.json();
-    const member = payload?.ok === true && (
-      ["creator", "administrator", "member"].includes(payload?.result?.status) ||
-      (payload?.result?.status === "restricted" && payload?.result?.is_member === true)
-    );
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || payload?.ok !== true) {
+      console.error("luna Telegram getChatMember failed", {
+        httpStatus: response.status,
+        telegramErrorCode: payload?.error_code ?? null,
+        telegramDescription: payload?.description ?? "invalid Telegram response",
+      });
+      return false;
+    }
+    const status = String(payload?.result?.status ?? "unknown");
+    const member = ["creator", "administrator", "member"].includes(status) ||
+      (status === "restricted" && payload?.result?.is_member === true);
+    console.info("luna Telegram membership result", { status, member });
     membershipCache.set(telegramId, { member, checkedAt: Date.now() });
     return member;
-  } catch {
+  } catch (error) {
+    console.error("luna Telegram membership request failed", error instanceof Error ? error.message : "unknown");
     return false;
   }
 }
