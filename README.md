@@ -34,7 +34,7 @@ The API listens on `PORT` (default `3000`). The server requires `SUPABASE_URL` a
 - `POST /api/register`, `POST /api/login`, `GET /api/me`, `POST /api/logout`
 - `GET /api/chats`, `PUT /api/chats/:id`, `DELETE /api/chats/:id`, `DELETE /api/chats`
 - `POST /api/chat`
-- `PUT /api/plan` rejects client-side plan changes; entitlements must be controlled by trusted billing logic.
+- `PUT /api/plan` persists the demo plan choice in Supabase Auth user metadata. It does not charge money or grant paid AI-provider credentials.
 - `GET /health`
 
 ## Supabase setup
