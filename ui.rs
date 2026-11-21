@@ -1529,7 +1529,7 @@ fn Composer() -> impl IntoView {
                           on:keydown=move |e: web_sys::KeyboardEvent| {
                               if e.key() == "Enter" && !e.shift_key() && !coarse() { e.prevent_default(); go(); }
                           }
-                          on:focus=move |_| request_animation_frame(move || ctx.scroll(false))
+                          on:focus=move |_| { menu_open.set(false); request_animation_frame(move || ctx.scroll(false)); }
                           on:blur=move |_| { }></textarea>
                 <button class="glass send" id="send"
                         aria-label=move || if ctx.busy.get() { "Стоп" } else { "Отправить" }
