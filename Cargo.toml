@@ -3,6 +3,10 @@ name = "luna-web"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "luna-web"
+path = "main.rs"
+
 [dependencies]
 leptos = { version = "0.6", features = ["csr"] }
 serde = { version = "1", features = ["derive"] }
