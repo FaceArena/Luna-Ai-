@@ -201,6 +201,7 @@ pub struct Ctx {
     pub drawer: RwSignal<bool>,
     pub sheet: RwSignal<bool>,
     pub page: RwSignal<Page>,
+    pub lab_tab: RwSignal<String>,
     pub doc: RwSignal<String>,
     pub doc_from: RwSignal<Page>,
     pub toast: RwSignal<String>,
@@ -236,6 +237,7 @@ impl Ctx {
             drawer: create_rw_signal(false),
             sheet: create_rw_signal(false),
             page: create_rw_signal(Page::Main),
+            lab_tab: create_rw_signal("personas".into()),
             doc: create_rw_signal(String::new()),
             doc_from: create_rw_signal(Page::Main),
             toast: create_rw_signal(String::new()),
@@ -588,8 +590,9 @@ impl Ctx {
         self.persist();
     }
 
-    pub fn send(self, text: String) {
-        let t = text.trim().to_string();
+    pub fn send(self, text: String, image_data: Option<String>) {
+        let mut t = text.trim().to_string();
+        if t.is_empty() && image_data.is_some() { t = "Проанализируй, пожалуйста, это изображение.".into(); }
         if t.is_empty() || self.busy.get_untracked() {
             return;
         }
@@ -647,7 +650,7 @@ impl Ctx {
         let body = serde_json::json!({
             "msgs": &h[skip..], "chat_id": self.cur.get_untracked(), "name": cfg.name, "who": cfg.who,
             "rules": cfg.rules, "len": cfg.len, "you": cfg.you, "keep": cfg.keep,
-            "lore_context": lore_context, "preset_context": preset_context
+            "lore_context": lore_context, "preset_context": preset_context, "image_data": image_data
         });
         const ERR: &str = "Не удалось получить ответ. Отправьте сообщение ещё раз.";
 
@@ -675,6 +678,7 @@ impl Ctx {
             };
             match resp.status() {
                 402 => return self.fail("Инструкции персонального ИИ превышают лимит бесплатной версии. Сократите их или посмотрите доступные тарифы.".to_string(), 3),
+                413 => return self.fail("Изображение слишком большое. Выберите фото до 3 МБ.", 0),
                 429 => return self.fail(pick(&data().tpl_limit), 2),
                 401 => {
                     self.me.set(None);
