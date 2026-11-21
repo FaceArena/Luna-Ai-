@@ -792,7 +792,7 @@ fn row_view(ctx: Ctx, r: Row, anim: RwSignal<Option<usize>>, last_ai_id: Memo<Op
                     {(r.fx == 2 || r.fx == 3).then(|| view! {
                         <div class="grp lim">
                             <div class="row"><span class="rt">"Статус"</span><span class="rv">{if r.fx == 3 { "Промт длиннее лимита" } else { "Лимит превышен" }}</span></div>
-                            <div class="row"><span class="rt">"Тариф"</span><span class="rv">{if r.fx == 3 { "Бесплатный" } else { plan.clone() }}</span></div>
+                            <div class="row"><span class="rt">"Тариф"</span><span class="rv">{if r.fx == 3 { "Бесплатный".to_string() } else { plan.clone() }}</span></div>
                             {if r.fx == 3 {
                                 view! { <button class="cta" type="button" on:click=move |_| ctx.open_page(Page::Plan)>"Посмотреть тарифы"</button> }.into_view()
                             } else {
