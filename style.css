@@ -782,3 +782,24 @@ html, body {
 }
 /* Keep the switch hit area transparent; only the inset track changes state. */
 .lab-state.on{background:transparent}
+
+
+/* Preset actions: separate primary save from active-state management. */
+.lab-preset-actions{display:flex;flex-direction:column;gap:14px;margin-top:16px;min-width:0}
+.lab-preset-save{width:100%;margin-top:0!important;min-height:52px;justify-content:center}
+.lab-preset-active{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;padding:12px 14px;border:1px solid var(--glass2);border-radius:16px;background:color-mix(in srgb,var(--glass) 78%,transparent)}
+.lab-preset-active-label{min-width:0;color:var(--fg2);font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+.lab-preset-disable{flex:none;min-height:40px;padding:0 14px;border:1px solid color-mix(in srgb,#ff7777 38%,var(--edge));border-radius:12px;background:color-mix(in srgb,#ff7777 9%,transparent);color:color-mix(in srgb,#ffaaaa 82%,var(--fg));font:inherit;font-size:12px;font-weight:600;touch-action:manipulation}
+.lab-preset-disable:disabled{opacity:.38;cursor:not-allowed}
+.lab-preset-disable:focus-visible{outline:2px solid color-mix(in srgb,var(--c) 88%,white);outline-offset:2px}
+@media(max-width:520px){
+  .lab-preset-actions{gap:12px;margin-top:16px}
+  .lab-preset-save{min-height:50px}
+  .lab-preset-active{align-items:center;padding:11px 12px;gap:8px}
+  .lab-preset-active-label{font-size:11px}
+  .lab-preset-disable{min-height:44px;padding:0 12px}
+}
+@media(max-width:360px){
+  .lab-preset-active{align-items:flex-start;flex-direction:column}
+  .lab-preset-disable{width:100%}
+}
