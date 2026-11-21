@@ -465,3 +465,25 @@ body {
   #app .msg { opacity: 1; transform: none; }
   #app .empty.leaving { transform: none; }
 }
+
+/* iOS viewport correction: the composer must follow the visual viewport immediately. */
+#app {
+  top: 0;
+  right: 0;
+  bottom: auto;
+  left: 0;
+  height: var(--vvh, 100%);
+  transition: none !important;
+}
+#shell {
+  flex: 1 1 0%;
+  height: auto;
+  min-height: 0;
+}
+#shell > footer {
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+html.keyboard-open #shell > footer {
+  padding-bottom: 8px;
+}
