@@ -783,11 +783,6 @@ Deno.serve(async (req: Request) => {
       if (!messages.length || messages.length > limits.maxMessages || messages.some((m: any) =>
         !["user", "assistant"].includes(m.role) || typeof m.content !== "string" || m.content.length > limits.maxMessageChars))
         return text(400, "Слишком длинный запрос или некорректная история.");
-      const imageData = typeof body.image_data === "string" ? body.image_data.trim() : "";
-      if (body.image_data != null && typeof body.image_data !== "string") return text(400, "Некорректное изображение.");
-      if (imageData.length > 4_300_000) return text(413, "Изображение слишком большое. Выберите фото до 3 МБ.");
-      if (imageData && (!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(imageData) || messages[messages.length - 1]?.role !== "user"))
-        return text(400, "Поддерживаются только JPG, PNG и WebP.");
 
       const loreContext = typeof body.lore_context === "string" ? body.lore_context.trim().slice(0, 8000) : "";
       const presetContext = typeof body.preset_context === "string" ? body.preset_context.trim().slice(0, 2000) : "";
@@ -879,7 +874,7 @@ Deno.serve(async (req: Request) => {
       if (keyError || typeof apiKey !== "string" || !apiKey) {
         return text(503, "AI-сервис временно недоступен. Попробуйте позже.");
       }
-      const model = imageData ? "qwen/qwen3.8-27b" : "openai/gpt-oss-120b";
+      const model = "openai/gpt-oss-120b";
       const persona = String(body.who ?? "").trim().slice(0, 12000);
       const customRules = String(body.rules ?? "").trim().slice(0, 18000);
       const hasCustomPersona = Boolean(persona || customRules);
@@ -923,21 +918,14 @@ Deno.serve(async (req: Request) => {
         semanticContext ? `English semantic retrieval (ranked by meaning similarity):\n${semanticContext}` : "",
         storyContext ? `Current roleplay continuity:\n${storyContext}` : "",
       ].join("\n");
-      const modelMessages = imageData
-        ? messages.map((message: any, index: number) => index === messages.length - 1 && message.role === "user"
-          ? { ...message, content: [
-              { type: "text", text: message.content },
-              { type: "image_url", image_url: { url: imageData } },
-            ] }
-          : message)
-        : messages;
-      const all = [{ role: "system", content: system }, ...modelMessages];
+      const all = [{ role: "system", content: system }, ...messages];
       const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           model, messages: all, stream: false,
-          ...(imageData ? {} : { reasoning_effort: limits.reasoningEffort, reasoning_format: "hidden" }),
+          reasoning_effort: limits.reasoningEffort,
+          reasoning_format: "hidden",
           max_completion_tokens: limits.maxCompletionTokens,
         }),
       });
