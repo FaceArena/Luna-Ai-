@@ -1085,9 +1085,9 @@ fn Log() -> impl IntoView {
                         </Show>
                         <span class="stream-text" class:active=move || !blank.get()>
                             <For
-                                each=move || ctx.stream.get().unwrap_or_default().chars().enumerate().map(|(i, ch)| (i, ch.to_string())).collect::<Vec<_>>()
+                                each=move || { ctx.stream.get().unwrap_or_default().chars().enumerate().collect::<Vec<_>>() }
                                 key=|(i, _)| *i
-                                children=move |(_, ch)| view! { <span class="stream-char">{ch}</span> }
+                                children=move |(_, ch)| view! { <span class="stream-char">{ch.to_string()}</span> }
                             />
                         </span>
                     </div>
