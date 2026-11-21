@@ -919,7 +919,7 @@ fn PageDoc() -> impl IntoView {
                         {rb(ctx.mi.get_untracked())}
                         <div><b>{d.t.clone()}</b><span>{format!("Редакция от {}", data().lg_date)}</span></div>
                     </div>
-                    {<div class="grp doc">{d.s.iter().map(|(h, t)| view! { <section class="doc-section"><b>{h.clone()}</b><p>{t.clone()}</p></section> }).collect_view()}</div>}
+                    <div class="grp doc">{d.s.iter().map(|(h, t)| view! { <section class="doc-section"><b>{h.clone()}</b><p>{t.clone()}</p></section> }).collect_view()}</div>
                 }.into_view())}
             </div>
         </section>
