@@ -561,30 +561,47 @@ fn PageAcc() -> impl IntoView {
     let nm = create_rw_signal(String::new());
     let email = create_rw_signal(String::new());
     let pass = create_rw_signal(String::new());
+    let code = create_rw_signal(String::new());
+    let verifying = create_rw_signal(false);
     let auth_busy = create_rw_signal(false);
-
     let info = create_rw_signal(String::new());
+
     let go = move || {
-        if auth_busy.get_untracked() {
+        if auth_busy.get_untracked() { return; }
+        let m = email.get_untracked().trim().to_string();
+        if verifying.get_untracked() {
+            let c = code.get_untracked().trim().to_string();
+            if !c.chars().all(|x| x.is_ascii_digit()) || c.len() != 6 {
+                return err.set("Введите шестизначный код из письма".into());
+            }
+            err.set(String::new());
+            auth_busy.set(true);
+            spawn_local(async move {
+                let result = api::verify_email(&m, &c).await;
+                auth_busy.set(false);
+                match result {
+                    Ok(me) => {
+                        code.set(String::new());
+                        pass.set(String::new());
+                        verifying.set(false);
+                        info.set(String::new());
+                        ctx.finish_login(me);
+                    }
+                    Err(e) => err.set(e),
+                }
+            });
             return;
         }
-        let (m, p, n) = (email.get_untracked().trim().to_string(), pass.get_untracked(), nm.get_untracked().trim().to_string());
+
+        let (p, n) = (pass.get_untracked(), nm.get_untracked().trim().to_string());
         let reg = up.get_untracked();
-        if reg && n.is_empty() {
-            return err.set("Введите имя".into());
-        }
-        if reg && n.chars().count() > 40 {
-            return err.set("Имя должно быть не длиннее 40 символов".into());
-        }
+        if reg && n.is_empty() { return err.set("Введите имя".into()); }
+        if reg && n.chars().count() > 40 { return err.set("Имя должно быть не длиннее 40 символов".into()); }
         if m.len() > 254 || !m.contains('@') || !m.rsplit_once('@').map_or(false, |(_, domain)| domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.')) {
             return err.set("Введите корректную почту".into());
         }
-        if p.chars().count() < 8 || p.chars().count() > 128 {
-            return err.set("Пароль должен содержать от 8 до 128 символов".into());
-        }
-        if reg && !ok.get_untracked() {
-            return err.set("Подтвердите согласие с условиями".into());
-        }
+        if p.chars().count() < 8 || p.chars().count() > 128 { return err.set("Пароль должен содержать от 8 до 128 символов".into()); }
+        if reg && !ok.get_untracked() { return err.set("Подтвердите согласие с условиями".into()); }
         err.set(String::new());
         info.set(String::new());
         auth_busy.set(true);
@@ -601,7 +618,8 @@ fn PageAcc() -> impl IntoView {
                     pass.set(String::new());
                     up.set(false);
                     ok.set(false);
-                    info.set(format!("Аккаунт создан. Подтвердите адрес {} по ссылке из письма, затем войдите.", address));
+                    verifying.set(true);
+                    info.set(format!("Код подтверждения отправлен на {}. Введите 6 цифр из письма.", address));
                 }
                 Err(e) => err.set(e),
             }
@@ -629,23 +647,32 @@ fn PageAcc() -> impl IntoView {
                         <div class="prof">
                             {move || rb(ctx.mi.get())}
                             <div>
-                                <b>{move || if up.get() { "Создать аккаунт" } else { "Войдите в аккаунт" }}</b>
+                                <b>{move || if verifying.get() { "Подтвердите почту" } else if up.get() { "Создать аккаунт" } else { "Войдите в аккаунт" }}</b>
                                 <span>"Чтобы хранить чаты и писать ИИ"</span>
                             </div>
                         </div>
                         <form on:submit=move |e| { e.prevent_default(); go(); }>
-                            <Show when=move || up.get()>
+                            <Show when=move || up.get() && !verifying.get()>
                                 <label class="fl" for="a-name">"Имя"</label>
                                 <input class="fi" id="a-name" maxlength="40" autocomplete="name" prop:value=move || nm.get() on:input=move |e| nm.set(event_target_value(&e))/>
                             </Show>
                             <label class="fl" for="a-mail">"Электронная почта"</label>
                             <input class="fi" id="a-mail" type="email" inputmode="email" autocomplete="email" required placeholder="name@mail.com"
+                                   prop:disabled=move || verifying.get()
                                    prop:value=move || email.get() on:input=move |e| email.set(event_target_value(&e))/>
-                            <label class="fl" for="a-pass">"Пароль"</label>
-                            <input class="fi" id="a-pass" type="password" minlength="8" maxlength="128" required
-                                   autocomplete=move || if up.get() { "new-password" } else { "current-password" }
-                                   prop:value=move || pass.get() on:input=move |e| pass.set(event_target_value(&e))/>
-                            <Show when=move || up.get()>
+                            <Show when=move || !verifying.get()>
+                                <label class="fl" for="a-pass">"Пароль"</label>
+                                <input class="fi" id="a-pass" type="password" minlength="8" maxlength="128" required
+                                       autocomplete=move || if up.get() { "new-password" } else { "current-password" }
+                                       prop:value=move || pass.get() on:input=move |e| pass.set(event_target_value(&e))/>
+                            </Show>
+                            <Show when=move || verifying.get()>
+                                <label class="fl" for="a-code">"Код из письма"</label>
+                                <input class="fi" id="a-code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                                       maxlength="6" placeholder="000000" required
+                                       prop:value=move || code.get() on:input=move |e| code.set(event_target_value(&e).chars().filter(|c| c.is_ascii_digit()).take(6).collect())/>
+                            </Show>
+                            <Show when=move || up.get() && !verifying.get()>
                                 <div class="grp" style="margin-top:14px">
                                     <label class="row consent-row">
                                         <input class="consent-check" type="checkbox"
@@ -660,10 +687,17 @@ fn PageAcc() -> impl IntoView {
                             </Show>
                             <p class="err">{move || err.get()}</p>
                             <p class="hint">{move || info.get()}</p>
-                            <button class="cta" type="submit" disabled=move || auth_busy.get()>{move || if auth_busy.get() { "Подождите…" } else if up.get() { "Создать аккаунт" } else { "Войти" }}</button>
-                            <button class="lnk" type="button" disabled=move || auth_busy.get() on:click=move |_| { err.set(String::new()); info.set(String::new()); ok.set(false); up.update(|v| *v = !*v); }>
-                                {move || if up.get() { "У меня уже есть аккаунт" } else { "Создать аккаунт" }}
-                            </button>
+                            <button class="cta" type="submit" disabled=move || auth_busy.get()>{move || if auth_busy.get() { "Подождите…" } else if verifying.get() { "Подтвердить почту" } else if up.get() { "Создать аккаунт" } else { "Войти" }}</button>
+                            <Show when=move || !verifying.get()>
+                                <button class="lnk" type="button" disabled=move || auth_busy.get() on:click=move |_| { err.set(String::new()); info.set(String::new()); ok.set(false); up.update(|v| *v = !*v); }>
+                                    {move || if up.get() { "У меня уже есть аккаунт" } else { "Создать аккаунт" }}
+                                </button>
+                            </Show>
+                            <Show when=move || verifying.get()>
+                                <button class="lnk" type="button" disabled=move || auth_busy.get() on:click=move |_| { verifying.set(false); code.set(String::new()); info.set(String::new()); err.set(String::new()); up.set(true); }>
+                                    "Изменить данные регистрации"
+                                </button>
+                            </Show>
                             <p class="hint">"Пароль обрабатывается сервером; приложение не хранит его в открытом виде."</p>
                         </form>
                     }.into_view(),
@@ -672,7 +706,6 @@ fn PageAcc() -> impl IntoView {
         </section>
     }
 }
-
 #[component]
 fn PagePlan() -> impl IntoView {
     let ctx = expect_context::<Ctx>();

@@ -49,6 +49,28 @@ pub async fn auth<T: Serialize>(path: &str, body: &T) -> Result<AuthOutcome, Str
     Ok(AuthOutcome::SignedIn(me))
 }
 
+pub async fn verify_email(email: &str, code: &str) -> Result<Me, String> {
+    let r = Request::post("/api/verify-email")
+        .json(&serde_json::json!({ "email": email, "code": code }))
+        .map_err(|_| "Не удалось подготовить запрос".to_string())?
+        .send()
+        .await
+        .map_err(|_| "Нет связи с сервером. Проверьте интернет и повторите попытку.".to_string())?;
+
+    let status = r.status();
+    let body = r.text().await.unwrap_or_default();
+    if !(200..300).contains(&status) {
+        let message = body.trim();
+        return Err(if message.is_empty() {
+            "Не удалось подтвердить почту. Попробуйте ещё раз.".into()
+        } else {
+            message.to_string()
+        });
+    }
+    serde_json::from_str(&body)
+        .map_err(|_| "Сервер авторизации вернул некорректные данные".to_string())
+}
+
 pub async fn logout() {
     let _ = Request::post("/api/logout").send().await;
 }
