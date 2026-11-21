@@ -37,3 +37,10 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 1
+      - name: Deploy production to Cloudflare
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: '05ac7140a70ea8feadd41b96a0e4ff3d'
+          command: deploy
