@@ -15,6 +15,8 @@ const MENU: &str = r#"<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h10"/
 const DOWN: &str = r#"<path d="m6 9 6 6 6-6"/>"#;
 const SEND: &str = r#"<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>"#;
 const STOP: &str = r#"<rect x="7" y="7" width="10" height="10" rx="2.5"/>"#;
+const PHOTO: &str = r#"<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-5-5L5 19"/>"#;
+const PLUG: &str = r#"<path d="M12 22v-5M9 8V2M15 8V2M5 8h14v3a7 7 0 0 1-14 0V8Z"/>"#;
 
 fn ic(name: &str) -> impl IntoView {
     let p = data().icons.get(name).cloned().unwrap_or_default();
@@ -570,7 +572,11 @@ fn PageAi() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     let prompt_words = move || {
         let cfg = ctx.cfg.get();
-        cfg.who.split_whitespace().count() + cfg.rules.split_whitespace().count()
+        let preset_words = cfg.lab.active_preset.as_ref()
+            .and_then(|id| cfg.lab.presets.iter().find(|preset| &preset.id == id))
+            .map(|preset| preset.instructions.split_whitespace().count())
+            .unwrap_or(0);
+        cfg.who.split_whitespace().count() + cfg.rules.split_whitespace().count() + preset_words
     };
     let prompt_limit = move || ctx.me.get().map(|m| m.prompt_limit).unwrap_or(100);
     let prompt_over = move || prompt_words() > prompt_limit();
@@ -736,7 +742,7 @@ fn PagePlan() -> impl IntoView {
 #[component]
 fn PageLab() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
-    let tab = create_rw_signal("personas".to_string());
+    let tab = ctx.lab_tab;
     let persona_name = create_rw_signal(String::new());
     let preset_name = create_rw_signal(String::new());
     let preset_instructions = create_rw_signal(String::new());
@@ -1140,7 +1146,12 @@ fn PageDoc() -> impl IntoView {
 
 fn row_view(ctx: Ctx, r: Row, anim: RwSignal<Option<usize>>, last_ai_id: Memo<Option<u64>>) -> View {
     if r.user {
-        return view! { <div class="msg me">{r.text}</div> }.into_view();
+        return view! {
+            <div class="msg me">
+                {(!r.part.is_empty()).then(|| view! { <img class="msg-image" src=r.part.clone() alt="Прикреплённое изображение"/> })}
+                {r.text}
+            </div>
+        }.into_view();
     }
     let k = ctx.mi.get_untracked();
     if r.fx == 0 {
@@ -1354,6 +1365,10 @@ fn Composer() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     let draft = create_rw_signal(String::new());
     let ta = create_node_ref::<html::Textarea>();
+    let file_input = create_node_ref::<html::Input>();
+    let menu_open = create_rw_signal(false);
+    let image_data = create_rw_signal(Option::<String>::None);
+    let image_name = create_rw_signal(String::new());
 
     let fit = move || {
         if let Some(t) = ta.get_untracked() {
@@ -1364,16 +1379,18 @@ fn Composer() -> impl IntoView {
             let _ = st.set_property("height", &format!("{h}px"));
         }
     };
+    let choose_image = move |_| {
+        menu_open.set(false);
+        if let Some(input) = file_input.get_untracked() { input.click(); }
+    };
     let go = move || {
-        if ctx.busy.get_untracked() {
-            ctx.stop();
-            return;
-        }
-        ctx.send(draft.get_untracked());
+        if ctx.busy.get_untracked() { ctx.stop(); return; }
+        ctx.send(draft.get_untracked(), image_data.get_untracked());
         if ctx.busy.get_untracked() {
             draft.set(String::new());
-            // pointerdown на кнопке отменён: textarea сохраняет фокус,
-            // поэтому iOS Safari не закрывает клавиатуру после отправки.
+            image_data.set(None);
+            image_name.set(String::new());
+            menu_open.set(false);
             request_animation_frame(fit);
             request_animation_frame(move || {
                 if let Some(t) = ta.get_untracked() {
@@ -1388,24 +1405,135 @@ fn Composer() -> impl IntoView {
 
     view! {
         <footer>
+            <input class="file-picker" type="file" accept="image/jpeg,image/png,image/webp"
+                   node_ref=file_input
+                   on:change=move |e| {
+                       let input = event_target::<web_sys::HtmlInputElement>(&e);
+                       let Some(file) = input.files().and_then(|files| files.get(0)) else { return; };
+                       let mime = file.type_();
+                       if !["image/jpeg", "image/png", "image/webp"].contains(&mime.as_str()) {
+                           ctx.say("Поддерживаются JPG, PNG и WebP.");
+                           input.set_value("");
+                           return;
+                       }
+                       if file.size() > 3.0 * 1024.0 * 1024.0 {
+                           ctx.say("Фото должно быть не больше 3 МБ.");
+                           input.set_value("");
+                           return;
+                       }
+                       let file_label = file.name();
+                       let reader = match web_sys::FileReader::new() {
+                           Ok(reader) => reader,
+                           Err(_) => { ctx.say("Не удалось открыть изображение."); return; }
+                       };
+                       let reader_for_load = reader.clone();
+                       let onload = Closure::<dyn FnMut(web_sys::ProgressEvent)>::new(move |_| {
+                           if let Ok(result) = reader_for_load.result() {
+                               if let Some(data_url) = result.as_string() {
+                                   image_data.set(Some(data_url));
+                                   image_name.set(file_label.clone());
+                                   ctx.say("Фото прикреплено. Оно отправится со следующим сообщением.");
+                               }
+                           }
+                       });
+                       reader.set_onload(Some(onload.as_ref().unchecked_ref()));
+                       onload.forget();
+                       if reader.read_as_data_url(&file).is_err() { ctx.say("Не удалось прочитать изображение."); }
+                       input.set_value("");
+                   }/>
+            {move || image_data.get().map(|src| view! {
+                <div class="image-attachment glass">
+                    <img src=src alt="Предпросмотр прикреплённого фото"/>
+                    <span>{move || image_name.get()}</span>
+                    <button type="button" aria-label="Убрать фото" on:click=move |_| {
+                        image_data.set(None);
+                        image_name.set(String::new());
+                    }>"×"</button>
+                </div>
+            }).into_view()}
+            <div class="glass plus-menu" class:on=move || menu_open.get() aria-label="Дополнительные действия">
+                <div class="plus-menu-head">
+                    <b>"Вложения и инструменты"</b>
+                    <button type="button" aria-label="Закрыть меню" on:click=move |_| menu_open.set(false)>"×"</button>
+                </div>
+                <button class="plus-option" type="button" on:click=choose_image>
+                    <span class="plus-option-icon"><svg viewBox="0 0 24 24" inner_html=PHOTO></svg></span>
+                    <span><b>"Фото"</b><small>"Прикрепить изображение для анализа"</small></span>
+                </button>
+                <button class="plus-option" type="button" on:click=move |_| {
+                    menu_open.set(false);
+                    ctx.lab_tab.set("plugins".into());
+                    ctx.open_page(Page::Lab);
+                }>
+                    <span class="plus-option-icon"><svg viewBox="0 0 24 24" inner_html=PLUG></svg></span>
+                    <span><b>"Плагины"</b><small>"Управление интеграциями Luna"</small></span>
+                </button>
+                <div class="plus-menu-section">
+                    <span>"Пресеты ответа"</span>
+                    <small>"Выбор действует со следующего сообщения"</small>
+                </div>
+                {move || {
+                    let cfg = ctx.cfg.get();
+                    let active_name = cfg.lab.active_preset.as_ref()
+                        .and_then(|id| cfg.lab.presets.iter().find(|preset| &preset.id == id))
+                        .map(|preset| format!("Активен: {}", preset.name))
+                        .unwrap_or_else(|| "Сейчас без пресета".into());
+                    let presets = cfg.lab.presets.clone();
+                    view! {
+                        <div class="plus-current">{active_name}</div>
+                        {if presets.is_empty() {
+                            view! { <p class="plus-empty">"Пока нет сохранённых пресетов. Создай их в Лаборатории."</p> }.into_view()
+                        } else {
+                            presets.into_iter().map(|preset| {
+                                let id = preset.id.clone();
+                                let active_class_id = preset.id.clone();
+                                let active_aria_id = preset.id.clone();
+                                let len = preset.len.clone();
+                                let label = preset.name.clone();
+                                let toast_label = preset.name.clone();
+                                let length_label = match preset.len.as_str() { "short" => "Кратко", "long" => "Подробно", _ => "Обычно" };
+                                view! {
+                                    <button class="plus-preset" type="button"
+                                            class:active=move || ctx.cfg.get().lab.active_preset.as_deref() == Some(active_class_id.as_str())
+                                            aria-pressed=move || ctx.cfg.get().lab.active_preset.as_deref() == Some(active_aria_id.as_str())
+                                            on:click=move |_| {
+                                                ctx.cfg.update(|cfg| {
+                                                    cfg.len = len.clone();
+                                                    cfg.lab.active_preset = Some(id.clone());
+                                                });
+                                                ctx.say(&format!("Пресет «{}» применён к следующим сообщениям.", toast_label));
+                                                menu_open.set(false);
+                                            }>
+                                        <span>{label}</span>
+                                        <small>{length_label}</small>
+                                    </button>
+                                }
+                            }).collect_view()
+                        }}
+                    }.into_view()
+                }}
+            </div>
             <div class="glass bar">
+                <button class="glass attach" type="button" aria-label="Открыть вложения и инструменты"
+                        aria-expanded=move || menu_open.get()
+                        on:click=move |_| {
+                            ctx.pal_open.set(false);
+                            ctx.msh_open.set(false);
+                            menu_open.update(|open| *open = !*open);
+                        }>
+                    <svg viewBox="0 0 24 24" inner_html=PLUS></svg>
+                </button>
                 <textarea id="inp" rows="1" placeholder="Напишите сообщение" aria-label="Сообщение" autocomplete="off" autocapitalize="sentences"
                           node_ref=ta prop:value=move || draft.get()
                           on:input=move |e| { draft.set(event_target_value(&e)); fit(); }
                           on:keydown=move |e: web_sys::KeyboardEvent| {
                               if e.key() == "Enter" && !e.shift_key() && !coarse() { e.prevent_default(); go(); }
                           }
-                          on:focus=move |_| {
-                              // Do not scroll the document: Safari resizes the visual viewport.
-                              // The message list remains the only scrollable chat region.
-                              request_animation_frame(move || ctx.scroll(false));
-                          }
-                          on:blur=move |_| {
-                              // #app follows visualViewport resize/scroll events.
-                          }></textarea>
+                          on:focus=move |_| { menu_open.set(false); request_animation_frame(move || ctx.scroll(false)); }
+                          on:blur=move |_| { }></textarea>
                 <button class="glass send" id="send"
                         aria-label=move || if ctx.busy.get() { "Стоп" } else { "Отправить" }
-                        disabled=move || !ctx.busy.get() && draft.get().trim().is_empty()
+                        disabled=move || !ctx.busy.get() && draft.get().trim().is_empty() && image_data.get().is_none()
                         on:pointerdown=move |e: web_sys::PointerEvent| e.prevent_default()
                         on:click=move |_| go()>
                     <svg viewBox="0 0 24 24" prop:innerHTML=move || if ctx.busy.get() { STOP } else { SEND }></svg>
