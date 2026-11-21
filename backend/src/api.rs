@@ -295,6 +295,61 @@ pub async fn delete_all_chats(State(state): State<AppState>, headers: HeaderMap)
     else { error(StatusCode::BAD_GATEWAY, "Ошибка очистки истории.") }
 }
 
+async fn call_luna_edge(
+    state: &AppState,
+    token: &str,
+    method: reqwest::Method,
+    body: Option<Value>,
+) -> Response {
+    let mut request = state.http
+        .request(method, format!("{}/functions/v1/luna-ai", state.supabase_url))
+        .header("apikey", state.supabase_anon_key.as_ref())
+        .bearer_auth(token);
+    if let Some(body) = body {
+        request = request.json(&body);
+    }
+    let upstream = match request.send().await {
+        Ok(response) => response,
+        Err(_) => return error(StatusCode::BAD_GATEWAY, "Не удалось связаться с AI-сервисом."),
+    };
+    let status = StatusCode::from_u16(upstream.status().as_u16())
+        .unwrap_or(StatusCode::BAD_GATEWAY);
+    let content_type = upstream.headers().get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("application/json")
+        .to_owned();
+    let bytes = match upstream.bytes().await {
+        Ok(bytes) => bytes,
+        Err(_) => return error(StatusCode::BAD_GATEWAY, "Не удалось прочитать ответ AI-сервиса."),
+    };
+    Response::builder()
+        .status(status)
+        .header(header::CONTENT_TYPE, content_type)
+        .body(Body::from(bytes))
+        .unwrap()
+}
+
+pub async fn get_provider_settings(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Response {
+    let (token, _) = match token_and_user(&state, &headers).await {
+        Ok(value) => value, Err(response) => return response,
+    };
+    call_luna_edge(&state, &token, reqwest::Method::GET, None).await
+}
+
+pub async fn update_provider_settings(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<Value>,
+) -> Response {
+    let (token, _) = match token_and_user(&state, &headers).await {
+        Ok(value) => value, Err(response) => return response,
+    };
+    call_luna_edge(&state, &token, reqwest::Method::POST, Some(input)).await
+}
+
 #[derive(Deserialize)]
 pub struct ChatInput {
     msgs: Vec<ChatMessage>,
@@ -310,7 +365,7 @@ pub async fn chat(
     headers: HeaderMap,
     Json(input): Json<ChatInput>,
 ) -> Response {
-    let (_token, user) = match token_and_user(&state, &headers).await {
+    let (token, user) = match token_and_user(&state, &headers).await {
         Ok(value) => value, Err(response) => return response,
     };
     {
@@ -332,20 +387,6 @@ pub async fn chat(
         || input.msgs.iter().any(|m| m.content.len() > 16_000 || !["user","assistant"].contains(&m.role.as_str())) {
         return error(StatusCode::BAD_REQUEST, "Слишком длинный запрос или некорректная история.");
     }
-
-    let provider = match std::env::var("LUNA_PROVIDER").unwrap_or_else(|_| "groq".into()).as_str() {
-        "groq" => Provider::Groq,
-        "gemini" => Provider::Gemini,
-        _ => return error(StatusCode::SERVICE_UNAVAILABLE, "Не настроен AI-провайдер."),
-    };
-    let key_name = match provider { Provider::Groq => "GROQ_API_KEY", Provider::Gemini => "GEMINI_API_KEY" };
-    let Some(api_key) = std::env::var(key_name).ok().filter(|v| !v.trim().is_empty()) else {
-        return error(StatusCode::SERVICE_UNAVAILABLE, "AI-провайдер пока не настроен.");
-    };
-    let model = std::env::var("LUNA_MODEL").unwrap_or_else(|_| match provider {
-        Provider::Groq => "llama-3.3-70b-versatile".into(),
-        Provider::Gemini => "gemini-2.5-flash".into(),
-    });
     let system = format!(
         "You are {}. Role: {}. Rules: {}. Response length: {}. User name: {}. Be helpful and follow the role.",
         input.name.as_deref().unwrap_or("Luna"),
@@ -354,19 +395,12 @@ pub async fn chat(
         input.len.as_deref().unwrap_or("normal"),
         input.you.as_deref().unwrap_or(""),
     );
-    let config = ProviderConfig { provider, model, api_key };
-    match providers::complete(&state.http, &config, &input.msgs, &system).await {
-        Ok(text) => Response::builder()
-            .status(StatusCode::OK)
-            .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
-            .body(Body::from(text))
-            .unwrap(),
-        Err(providers::ProviderError::Upstream(StatusCode::TOO_MANY_REQUESTS)) =>
-            error(StatusCode::TOO_MANY_REQUESTS, "Лимит запросов AI-провайдера."),
-        Err(providers::ProviderError::Upstream(StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)) =>
-            error(StatusCode::SERVICE_UNAVAILABLE, "Провайдер отклонил API-ключ."),
-        Err(_) => error(StatusCode::BAD_GATEWAY, "Не удалось получить ответ AI-провайдера."),
-    }
+    call_luna_edge(
+        &state,
+        &token,
+        reqwest::Method::POST,
+        Some(json!({ "action": "chat", "msgs": input.msgs, "system": system })),
+    ).await
 }
 
 #[derive(Deserialize)]
