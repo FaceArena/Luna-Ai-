@@ -294,3 +294,7 @@ button,.row,.hi{touch-action:manipulation}
 .bg i:nth-child(1){--k:46}.bg i:nth-child(2){--k:84}.bg i:nth-child(3){--k:62}
 .calm .bg i{translate:none}
 .send:disabled{pointer-events:none}
+
+/* Settings navigation rows use native buttons for reliable touch/click activation. */
+.row.navrow{width:100%;border:0;background:transparent;color:inherit;font:inherit;text-align:left;appearance:none;-webkit-appearance:none}
+.row.navrow:focus-visible{outline:2px solid var(--b);outline-offset:-3px}

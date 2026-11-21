@@ -56,6 +56,7 @@ pub struct Chat {
 pub struct Me {
     pub name: String,
     pub email: String,
+    #[serde(default)]
     pub plan: usize,
 }
 
@@ -279,6 +280,11 @@ impl Ctx {
         self.drawer.set(false);
         self.pal_open.set(false);
         self.msh_open.set(false);
+        self.open_page(page);
+    }
+
+    pub fn open_page(self, page: Page) {
+        self.drawer.set(false);
         self.page.set(page);
         self.sheet.set(true);
     }

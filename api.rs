@@ -1,6 +1,6 @@
 use crate::state::{Chat, Me};
 use gloo_net::http::Request;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub async fn me() -> Option<Me> {
     let r = Request::get("/api/me").send().await.ok()?;
@@ -10,19 +10,43 @@ pub async fn me() -> Option<Me> {
     r.json().await.ok()
 }
 
-/// path: "/api/login" или "/api/register"; при ошибке возвращает текст сервера.
-pub async fn auth<T: Serialize>(path: &str, body: &T) -> Result<Me, String> {
+#[derive(Deserialize)]
+struct PendingConfirmation {
+    email: String,
+}
+
+pub enum AuthOutcome {
+    SignedIn(Me),
+    NeedsEmailConfirmation(String),
+}
+
+/// Единый контракт для входа и регистрации.
+pub async fn auth<T: Serialize>(path: &str, body: &T) -> Result<AuthOutcome, String> {
     let r = Request::post(path)
         .json(body)
-        .map_err(|e| e.to_string())?
+        .map_err(|_| "Не удалось подготовить запрос".to_string())?
         .send()
         .await
-        .map_err(|_| "Нет связи с сервером".to_string())?;
-    if r.ok() {
-        r.json::<Me>().await.map_err(|e| e.to_string())
-    } else {
-        Err(r.text().await.unwrap_or_else(|_| "Ошибка".into()))
+        .map_err(|_| "Нет связи с сервером. Проверьте интернет и повторите попытку.".to_string())?;
+
+    let status = r.status();
+    let body = r.text().await.unwrap_or_default();
+    if status == 202 {
+        let pending: PendingConfirmation = serde_json::from_str(&body)
+            .map_err(|_| "Сервис регистрации вернул некорректный ответ".to_string())?;
+        return Ok(AuthOutcome::NeedsEmailConfirmation(pending.email));
     }
+    if !(200..300).contains(&status) {
+        let message = body.trim();
+        return Err(if message.is_empty() {
+            "Не удалось выполнить запрос. Попробуйте ещё раз.".into()
+        } else {
+            message.to_string()
+        });
+    }
+    let me: Me = serde_json::from_str(&body)
+        .map_err(|_| "Сервер авторизации вернул некорректные данные".to_string())?;
+    Ok(AuthOutcome::SignedIn(me))
 }
 
 pub async fn logout() {

@@ -1,42 +1,56 @@
-# Luna на Rust (axum + Leptos)
+# Luna AI
 
-```
-backend/   — сервер: аккаунты (Argon2), история чатов (SQLite), потоковые ответы Claude
-frontend/  — интерфейс на Leptos (WASM), стили и вид как в исходной Luna.html
-gen.js     — вытаскивает данные (кролик, палитры, документы) из исходной Luna.html в frontend/assets/data.json
-```
+Luna AI is a Rust/Leptos web application with a separate Axum API server.
 
-## Запуск
+## Repository layout
 
-```bash
+- Root `main.rs`, `api.rs`, `state.rs`, `ui.rs`, `style.css`: Leptos client (WASM).
+- Root `data.json` and `data.rs`: bundled UI copy, themes, models, and static data.
+- `backend/`: Axum server, Supabase Auth integration, chat-history API, and Groq/Gemini provider adapters.
+- `docs/MODERNIZATION_PLAN.md`: architecture audit and modernization decisions.
+
+## Build the client
+
+```sh
 rustup target add wasm32-unknown-unknown
 cargo install trunk
-
-cd frontend && trunk build --release        # соберёт frontend/dist
-cd ../backend
-ANTHROPIC_API_KEY=sk-ant-... cargo run --release
-# открыть http://localhost:3000
+trunk build --release
 ```
 
-Разработка с автоперезагрузкой фронта: `cd frontend && trunk serve` (запросы /api идут на :3000).
+The root `Cargo.toml` explicitly points the binary target to `main.rs`.
 
-## Переменные окружения
-| имя | значение по умолчанию |
-|---|---|
-| `ANTHROPIC_API_KEY` | обязательна |
-| `PORT` | 3000 |
-| `LUNA_DB` | luna.db |
-| `LUNA_STATIC` | ../frontend/dist |
-| `LUNA_SECURE` | если задана, cookie получает флаг Secure (нужно за HTTPS) |
+## Run the API server
 
-## Что изменилось по сравнению с Luna.html
-- Ответы ИИ идут через сервер (ключ Anthropic не попадает в браузер). Тариф Lina / Luna / Luna Pro выбирает модель на сервере.
-- Аккаунт настоящий: пароль хешируется Argon2, сессия в HttpOnly cookie. Вход через Apple/Google убран (на сервере его нет).
-- История чатов хранится на сервере; настройки внешнего вида и персонажа остались в localStorage.
-- Писать ИИ можно только после входа. Лимит: 12 запросов в минуту на пользователя.
-- Тарифы по-прежнему переключаются свободно (оплата не подключена): см. `set_plan` в backend/src/main.rs.
+Configure the server environment from `backend/.env.example`, then run:
 
-## Перед публикацией
-- Замените `[Название или ФИО оператора]`, `[email для связи]`, `[страна]` в frontend/assets/data.json.
-- Модели заданы константой `MODELS` в backend/src/main.rs.
-- Вход не защищён от перебора паролей по IP: поставьте за reverse proxy с лимитом или добавьте ограничение.
+```sh
+cargo run --release --manifest-path backend/Cargo.toml
+```
+
+The API listens on `PORT` (default `3000`). The server requires `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
+
+## Restored API routes
+
+- `POST /api/register`, `POST /api/login`, `GET /api/me`, `POST /api/logout`
+- `GET /api/chats`, `PUT /api/chats/:id`, `DELETE /api/chats/:id`, `DELETE /api/chats`
+- `POST /api/chat`
+- `PUT /api/plan` persists the demo plan choice in Supabase Auth user metadata. It does not charge money or grant paid AI-provider credentials.
+- `GET /health`
+
+## Supabase setup
+
+Apply the SQL migrations in `backend/migrations/` to the confirmed Luna Supabase project, in numerical order. The chat-history API uses the caller's Supabase access token and depends on RLS policies restricting rows to `auth.uid()`.
+
+Do not apply these migrations to a different Supabase project. The connected account currently does not have access to the previously identified Luna project.
+
+## AI providers
+
+The server-side adapters support Groq and Gemini. Provider credentials are never sent to the browser. The current draft reads credentials from server environment variables as an interim bridge. The agreed Vault-backed provider settings and in-app provider selector are not complete yet.
+
+## Current limitations
+
+- Supabase migrations have not been applied to a remote project.
+- Refresh-token rotation is not implemented; the session cookie currently lasts one hour.
+- Chat completion currently returns a plain text response; token-by-token streaming is not implemented yet.
+- The server has an in-process limit of 12 chat requests per account per minute. This limit resets on server restart and is not distributed across replicas.
+- CI must pass and the app must be integration-tested before production deployment.

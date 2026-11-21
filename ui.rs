@@ -337,19 +337,19 @@ fn ph(ctx: Ctx, title: impl Fn() -> String + 'static, back: impl Fn() + 'static)
 
 fn nav_row(icn: &'static str, t: impl Fn() -> String + 'static, v: impl Fn() -> String + 'static, f: impl Fn() + 'static) -> impl IntoView {
     view! {
-        <div class="row" on:click=move |_| f()>
+        <button type="button" class="row navrow" on:click=move |_| f()>
             {ic(icn)}<span class="rt">{t}</span><span class="rv">{v}</span>
             <svg class="ch" viewBox="0 0 24 24" inner_html=CHEV></svg>
-        </div>
+        </button>
     }
 }
 
 fn doc_row(ctx: Ctx, icn: Option<&'static str>, t: &'static str, key: &'static str, from: Page) -> impl IntoView {
     view! {
-        <div class="row" on:click=move |_| ctx.open_doc(key, from)>
+        <button type="button" class="row navrow" on:click=move |_| ctx.open_doc(key, from)>
             {icn.map(ic)}<span class="rt">{t}</span>
             <svg class="ch" viewBox="0 0 24 24" inner_html=CHEV></svg>
-        </div>
+        </button>
     }
 }
 
@@ -450,14 +450,16 @@ fn PageMain() -> impl IntoView {
                     {nav_row("user",
                         move || ctx.me.get().map(|m| m.name).unwrap_or_else(|| "Войти в аккаунт".into()),
                         move || if ctx.me.get().is_some() { String::new() } else { "Не выполнен".into() },
-                        move || ctx.page.set(Page::Acc))}
+                        move || ctx.open_page(Page::Acc))}
                 </div>
 
-                <h3>"Персонаж"</h3>
-                <div class="grp">{nav_row("ai", || "Персональный ИИ".into(), move || name(ctx), move || ctx.page.set(Page::Ai))}</div>
+                <h3>"ИИ"</h3>
+                <div class="grp">
+                    {nav_row("ai", || "Персональный ИИ".into(), move || name(ctx), move || ctx.open_page(Page::Ai))}
+                </div>
 
                 <h3>"Подписка"</h3>
-                <div class="grp">{nav_row("lock", || "Тарифы".into(), move || model_name(ctx), move || ctx.page.set(Page::Plan))}</div>
+                <div class="grp">{nav_row("lock", || "Тарифы".into(), move || model_name(ctx), move || ctx.open_page(Page::Plan))}</div>
 
                 <h3>"Настройки"</h3>
                 <div class="grp">
@@ -494,7 +496,7 @@ fn PageMain() -> impl IntoView {
 
                 <h3>"Поддержка"</h3>
                 <div class="grp">
-                    {nav_row("info", || "О приложении".into(), || String::new(), move || ctx.page.set(Page::About))}
+                    {nav_row("info", || "О приложении".into(), || String::new(), move || ctx.open_page(Page::About))}
                     {act_row("reset", "Сбросить настройки", true, armed, move || {
                         ctx.cfg.set(Cfg::default());
                         ctx.set_pal(0);
@@ -511,7 +513,7 @@ fn PageAi() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     view! {
         <section class=pgc(ctx, Page::Ai)>
-            {ph(ctx, || "Персональный ИИ".into(), move || ctx.page.set(Page::Main))}
+            {ph(ctx, || "Персональный ИИ".into(), move || ctx.open_page(Page::Main))}
             <div class="sc">
                 <div class="fl">"Шаблоны"</div>
                 <div class="pre">
@@ -556,26 +558,47 @@ fn PageAcc() -> impl IntoView {
     let nm = create_rw_signal(String::new());
     let email = create_rw_signal(String::new());
     let pass = create_rw_signal(String::new());
+    let auth_busy = create_rw_signal(false);
 
-    let go = move |_| {
-        let (m, p, n) = (email.get_untracked().trim().to_string(), pass.get_untracked(), nm.get_untracked());
+    let info = create_rw_signal(String::new());
+    let go = move || {
+        if auth_busy.get_untracked() {
+            return;
+        }
+        let (m, p, n) = (email.get_untracked().trim().to_string(), pass.get_untracked(), nm.get_untracked().trim().to_string());
         let reg = up.get_untracked();
-        if !m.contains('@') || !m.contains('.') {
+        if reg && n.is_empty() {
+            return err.set("Введите имя".into());
+        }
+        if reg && n.chars().count() > 40 {
+            return err.set("Имя должно быть не длиннее 40 символов".into());
+        }
+        if m.len() > 254 || !m.contains('@') || !m.rsplit_once('@').map_or(false, |(_, domain)| domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.')) {
             return err.set("Введите корректную почту".into());
         }
-        if p.chars().count() < 8 {
-            return err.set("Пароль не короче 8 символов".into());
+        if p.chars().count() < 8 || p.chars().count() > 128 {
+            return err.set("Пароль должен содержать от 8 до 128 символов".into());
         }
         if reg && !ok.get_untracked() {
             return err.set("Подтвердите согласие с условиями".into());
         }
         err.set(String::new());
+        info.set(String::new());
+        auth_busy.set(true);
         spawn_local(async move {
             let path = if reg { "/api/register" } else { "/api/login" };
-            match api::auth(path, &serde_json::json!({ "name": n, "email": m, "pass": p })).await {
-                Ok(me) => {
+            let result = api::auth(path, &serde_json::json!({ "name": n, "email": m, "pass": p })).await;
+            auth_busy.set(false);
+            match result {
+                Ok(api::AuthOutcome::SignedIn(me)) => {
                     pass.set(String::new());
                     ctx.finish_login(me);
+                }
+                Ok(api::AuthOutcome::NeedsEmailConfirmation(address)) => {
+                    pass.set(String::new());
+                    up.set(false);
+                    ok.set(false);
+                    info.set(format!("Аккаунт создан. Подтвердите адрес {} по ссылке из письма, затем войдите.", address));
                 }
                 Err(e) => err.set(e),
             }
@@ -584,7 +607,7 @@ fn PageAcc() -> impl IntoView {
 
     view! {
         <section class=pgc(ctx, Page::Acc)>
-            {ph(ctx, || "Аккаунт".into(), move || ctx.page.set(Page::Main))}
+            {ph(ctx, || "Аккаунт".into(), move || ctx.open_page(Page::Main))}
             <div class="sc">
                 {move || match ctx.me.get() {
                     Some(me) => view! {
@@ -607,30 +630,36 @@ fn PageAcc() -> impl IntoView {
                                 <span>"Чтобы хранить чаты и писать ИИ"</span>
                             </div>
                         </div>
-                        <Show when=move || up.get()>
-                            <label class="fl" for="a-name">"Имя"</label>
-                            <input class="fi" id="a-name" maxlength="40" autocomplete="off" prop:value=move || nm.get() on:input=move |e| nm.set(event_target_value(&e))/>
-                        </Show>
-                        <label class="fl" for="a-mail">"Электронная почта"</label>
-                        <input class="fi" id="a-mail" type="email" inputmode="email" autocomplete="email" placeholder="name@mail.com"
-                               prop:value=move || email.get() on:input=move |e| email.set(event_target_value(&e))/>
-                        <label class="fl" for="a-pass">"Пароль"</label>
-                        <input class="fi" id="a-pass" type="password" autocomplete="current-password"
-                               prop:value=move || pass.get() on:input=move |e| pass.set(event_target_value(&e))/>
-                        <div class="grp" style="margin-top:14px">
-                            <div class="row" on:click=move |_| ok.update(|v| *v = !*v)>
-                                <span class="rt">"Принимаю условия и политику"</span><span class="tg" class:on=move || ok.get()></span>
-                            </div>
-                            {doc_row(ctx, None, "Условия использования", "terms", Page::Acc)}
-                            {doc_row(ctx, None, "Политика конфиденциальности", "privacy", Page::Acc)}
-                            {doc_row(ctx, None, "Согласие на обработку данных", "consent", Page::Acc)}
-                        </div>
-                        <p class="err">{move || err.get()}</p>
-                        <button class="cta" on:click=go>{move || if up.get() { "Создать" } else { "Войти" }}</button>
-                        <button class="lnk" on:click=move |_| up.update(|v| *v = !*v)>
-                            {move || if up.get() { "У меня уже есть аккаунт" } else { "Создать аккаунт" }}
-                        </button>
-                        <p class="hint">"Пароль хранится на сервере только в виде хеша."</p>
+                        <form on:submit=move |e| { e.prevent_default(); go(); }>
+                            <Show when=move || up.get()>
+                                <label class="fl" for="a-name">"Имя"</label>
+                                <input class="fi" id="a-name" maxlength="40" autocomplete="name" prop:value=move || nm.get() on:input=move |e| nm.set(event_target_value(&e))/>
+                            </Show>
+                            <label class="fl" for="a-mail">"Электронная почта"</label>
+                            <input class="fi" id="a-mail" type="email" inputmode="email" autocomplete="email" required placeholder="name@mail.com"
+                                   prop:value=move || email.get() on:input=move |e| email.set(event_target_value(&e))/>
+                            <label class="fl" for="a-pass">"Пароль"</label>
+                            <input class="fi" id="a-pass" type="password" minlength="8" maxlength="128" required
+                                   autocomplete=move || if up.get() { "new-password" } else { "current-password" }
+                                   prop:value=move || pass.get() on:input=move |e| pass.set(event_target_value(&e))/>
+                            <Show when=move || up.get()>
+                                <div class="grp" style="margin-top:14px">
+                                    <div class="row" on:click=move |_| ok.update(|v| *v = !*v)>
+                                        <span class="rt">"Принимаю условия и политику"</span><span class="tg" class:on=move || ok.get()></span>
+                                    </div>
+                                    {doc_row(ctx, None, "Условия использования", "terms", Page::Acc)}
+                                    {doc_row(ctx, None, "Политика конфиденциальности", "privacy", Page::Acc)}
+                                    {doc_row(ctx, None, "Согласие на обработку данных", "consent", Page::Acc)}
+                                </div>
+                            </Show>
+                            <p class="err">{move || err.get()}</p>
+                            <p class="hint">{move || info.get()}</p>
+                            <button class="cta" type="submit" disabled=move || auth_busy.get()>{move || if auth_busy.get() { "Подождите…" } else if up.get() { "Создать аккаунт" } else { "Войти" }}</button>
+                            <button class="lnk" type="button" disabled=move || auth_busy.get() on:click=move |_| { err.set(String::new()); info.set(String::new()); up.update(|v| *v = !*v); }>
+                                {move || if up.get() { "У меня уже есть аккаунт" } else { "Создать аккаунт" }}
+                            </button>
+                            <p class="hint">"Пароль обрабатывается сервером; приложение не хранит его в открытом виде."</p>
+                        </form>
                     }.into_view(),
                 }}
             </div>
@@ -643,7 +672,7 @@ fn PagePlan() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     view! {
         <section class=pgc(ctx, Page::Plan)>
-            {ph(ctx, || "Тарифы".into(), move || ctx.page.set(Page::Main))}
+            {ph(ctx, || "Тарифы".into(), move || ctx.open_page(Page::Main))}
             <div class="sc">
                 {data().models.iter().enumerate().map(|(k, m)| {
                     let feats = data().feat[k].clone();
@@ -679,13 +708,13 @@ fn PageAbout() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     view! {
         <section class=pgc(ctx, Page::About)>
-            {ph(ctx, || "О приложении".into(), move || ctx.page.set(Page::Main))}
+            {ph(ctx, || "О приложении".into(), move || ctx.open_page(Page::Main))}
             <div class="sc">
                 <div class="grp">
                     <div class="row"><span class="rt">"Версия"</span><span class="rv">"2.0 (Rust)"</span></div>
                     <div class="row"><span class="rt">"Хранение данных"</span><span class="rv">"Сервер"</span></div>
                 </div>
-                <p class="hint">"Ответы создаёт Claude. Аккаунт и история чатов хранятся на сервере, настройки внешнего вида — в браузере. Текст разговора и инструкции передаются модели при отправке сообщения."</p>
+                <p class="hint">"Ответы создаются внутренней AI-системой Luna. Аккаунт и история чатов хранятся на сервере, настройки внешнего вида — в браузере. Текст разговора и инструкции передаются AI-системе при отправке сообщения."</p>
             </div>
         </section>
     }
@@ -698,7 +727,7 @@ fn PageDoc() -> impl IntoView {
         <section class=pgc(ctx, Page::Doc)>
             {ph(ctx,
                 move || data().docs.get(&ctx.doc.get()).map(|d| d.h.clone()).unwrap_or_default(),
-                move || ctx.page.set(ctx.doc_from.get_untracked()))}
+                move || ctx.open_page(ctx.doc_from.get_untracked()))}
             <div class="sc">
                 {move || data().docs.get(&ctx.doc.get()).map(|d| view! {
                     <div class="prof">
@@ -753,9 +782,10 @@ fn Log() -> impl IntoView {
     let streaming = create_memo(move |_| ctx.stream.with(|s| s.is_some()));
     let blank = create_memo(move |_| ctx.stream.with(|s| s.as_ref().map_or(true, |t| t.is_empty())));
     let empty = create_memo(move |_| ctx.log.with(|l| l.is_empty()) && !streaming.get());
+    let log_el = ctx.log_el;
 
     view! {
-        <main id="log" node_ref=ctx.log_el>
+        <main id="log" node_ref=log_el>
             <Show when=move || empty.get()>
                 <div class="empty">
                     <div class="glass big hey" on:click=move |_| {
@@ -794,6 +824,7 @@ fn Composer() -> impl IntoView {
 
     let fit = move || {
         if let Some(t) = ta.get_untracked() {
+            let t: &web_sys::HtmlTextAreaElement = t.unchecked_ref();
             let st = t.style();
             let _ = st.set_property("height", "auto");
             let h = t.scroll_height().min(140);

@@ -1,0 +1,11 @@
+DROP POLICY IF EXISTS "Users can read their Luna provider preference" ON public.luna_provider_settings;
+CREATE POLICY "Users can read their Luna provider preference" ON public.luna_provider_settings FOR SELECT TO authenticated USING (user_id = (select auth.uid()));
+DROP POLICY IF EXISTS "Users can read their Luna chats" ON public.luna_chats;
+CREATE POLICY "Users can read their Luna chats" ON public.luna_chats FOR SELECT TO authenticated USING (user_id = (select auth.uid()));
+DROP POLICY IF EXISTS "Users can create their Luna chats" ON public.luna_chats;
+CREATE POLICY "Users can create their Luna chats" ON public.luna_chats FOR INSERT TO authenticated WITH CHECK (user_id = (select auth.uid()));
+DROP POLICY IF EXISTS "Users can update their Luna chats" ON public.luna_chats;
+CREATE POLICY "Users can update their Luna chats" ON public.luna_chats FOR UPDATE TO authenticated USING (user_id = (select auth.uid())) WITH CHECK (user_id = (select auth.uid()));
+DROP POLICY IF EXISTS "Users can delete their Luna chats" ON public.luna_chats;
+CREATE POLICY "Users can delete their Luna chats" ON public.luna_chats FOR DELETE TO authenticated USING (user_id = (select auth.uid()));
+CREATE INDEX IF NOT EXISTS luna_provider_settings_vault_secret_id_idx ON public.luna_provider_settings (vault_secret_id) WHERE vault_secret_id IS NOT NULL;
