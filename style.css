@@ -468,12 +468,13 @@ body {
 
 /* iOS viewport correction: the composer must follow the visual viewport immediately. */
 #app {
-  top: 0;
+  top: var(--vvt, 0px);
   right: 0;
   bottom: auto;
   left: 0;
   height: var(--vvh, 100%);
   transition: none !important;
+  will-change: top, height;
 }
 #shell {
   flex: 1 1 0%;
