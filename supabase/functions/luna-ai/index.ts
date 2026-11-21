@@ -56,9 +56,23 @@ function detectCommunicationStyle(messages: any[]) {
     { key: "language", value: "Russian", pattern: /(?:\b(?:reply|answer|write) in Russian\b|по-русски|на русском языке|отвечай на русском)/i },
     { key: "language", value: "English", pattern: /(?:\b(?:reply|answer|write) in English\b|по-английски|на английском языке|отвечай на английском)/i },
   ];
+  const repeated = new Map<string, { key: string; value: string; count: number }>();
+  const persistentIntent = /(?:\b(?:i prefer|i like|my preference|from now on|always|usually|generally|i want you to always)\b|предпочитаю|мне нравится|всегда|обычно|в дальнейшем|постоянно)/i;
   for (const message of userMessages) {
     for (const rule of rules) {
-      if (rule.pattern.test(message)) found.set(rule.key, { value: rule.value, source: "explicit" });
+      if (!rule.pattern.test(message)) continue;
+      if (persistentIntent.test(message)) {
+        found.set(rule.key, { value: rule.value, source: "explicit" });
+      } else {
+        const signature = rule.key + ":" + rule.value;
+        const previous = repeated.get(signature);
+        repeated.set(signature, { key: rule.key, value: rule.value, count: (previous?.count ?? 0) + 1 });
+      }
+    }
+  }
+  for (const preference of repeated.values()) {
+    if (preference.count >= 3 && !found.has(preference.key)) {
+      found.set(preference.key, { value: preference.value, source: "inferred" });
     }
   }
   if (!found.has("language") && userMessages.length >= 3) {
