@@ -45,5 +45,5 @@ pub struct Data {
 
 pub fn data() -> &'static Data {
     static D: OnceLock<Data> = OnceLock::new();
-    D.get_or_init(|| serde_json::from_str(include_str!("../assets/data.json")).expect("data.json"))
+    D.get_or_init(|| serde_json::from_str(include_str!("data.json")).expect("data.json"))
 }
