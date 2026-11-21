@@ -559,7 +559,7 @@ fn PageAi() -> impl IntoView {
     view! {
         <section class=pgc(ctx, Page::Ai)>
             {ph(ctx, || "Персональный ИИ".into(), move || ctx.open_page(Page::Main))}
-            <div class="sc">
+            <div class="sc ai-settings-sc">
                 <div class="fl">"Шаблоны"</div>
                 <div class="pre">
                     {data().pre.iter().map(|p| {
