@@ -1,5 +1,6 @@
 use crate::{api, data::data, state::*};
 use leptos::*;
+use gloo_net::http::Request;
 use std::time::Duration;
 use wasm_bindgen::{closure::Closure, JsCast};
 
@@ -408,7 +409,7 @@ fn Sheet() -> impl IntoView {
         <div class="glass sheet" class:on=move || ctx.sheet.get() role="dialog" aria-label="Настройки">
             <div class="grab"></div>
             <div class="pgs">
-                <PageMain/><PageAi/><PageAcc/><PagePlan/><PageAbout/><PageDoc/>
+                <PageMain/><PageAi/><PageProviders/><PageAcc/><PagePlan/><PageAbout/><PageDoc/>
             </div>
         </div>
     }
@@ -453,8 +454,11 @@ fn PageMain() -> impl IntoView {
                         move || ctx.page.set(Page::Acc))}
                 </div>
 
-                <h3>"Персонаж"</h3>
-                <div class="grp">{nav_row("ai", || "Персональный ИИ".into(), move || name(ctx), move || ctx.page.set(Page::Ai))}</div>
+                <h3>"ИИ"</h3>
+                <div class="grp">
+                    {nav_row("ai", || "Персональный ИИ".into(), move || name(ctx), move || ctx.page.set(Page::Ai))}
+                    {nav_row("gear", || "Провайдеры и API-ключи".into(), || "Groq · Gemini".into(), move || ctx.page.set(Page::Providers))}
+                </div>
 
                 <h3>"Подписка"</h3>
                 <div class="grp">{nav_row("lock", || "Тарифы".into(), move || model_name(ctx), move || ctx.page.set(Page::Plan))}</div>
@@ -542,6 +546,149 @@ fn PageAi() -> impl IntoView {
                        prop:value=move || ctx.cfg.get().you on:input=move |e| ctx.cfg.update(|c| c.you = event_target_value(&e))/>
                 <button class="fi rst" on:click=move |_| ctx.cfg.update(|c| { c.name = "Luna".into(); c.who.clear(); c.rules.clear(); c.len = "normal".into(); c.you.clear(); })>"Сбросить персонажа"</button>
                 <p class="hint">"Эти инструкции добавляются к каждому разговору и действуют со следующего сообщения."</p>
+            </div>
+        </section>
+    }
+}
+
+#[component]
+fn PageProviders() -> impl IntoView {
+    let ctx = expect_context::<Ctx>();
+    let provider = create_rw_signal("groq".to_string());
+    let model = create_rw_signal("llama-3.3-70b-versatile".to_string());
+    let key = create_rw_signal(String::new());
+    let configured = create_rw_signal(false);
+    let status = create_rw_signal(String::new());
+
+    create_effect(move |_| {
+        if ctx.page.get() == Page::Providers {
+            status.set("Загружаем настройки…".into());
+            spawn_local(async move {
+                match Request::get("/api/provider-settings").send().await {
+                    Ok(resp) if resp.ok() => {
+                        match resp.json::<serde_json::Value>().await {
+                            Ok(data) => {
+                                let active = data.get("activeProvider").and_then(|v| v.as_str()).unwrap_or("groq").to_string();
+                                provider.set(active.clone());
+                                if let Some(rows) = data.get("providers").and_then(|v| v.as_array()) {
+                                    if let Some(row) = rows.iter().find(|row| row.get("provider").and_then(|v| v.as_str()) == Some(active.as_str())) {
+                                        model.set(row.get("model").and_then(|v| v.as_str()).unwrap_or("llama-3.3-70b-versatile").to_string());
+                                        configured.set(row.get("configured").and_then(|v| v.as_bool()).unwrap_or(false));
+                                    } else {
+                                        model.set(if active == "gemini" { "gemini-2.5-flash" } else { "llama-3.3-70b-versatile" }.into());
+                                        configured.set(false);
+                                    }
+                                }
+                                status.set(String::new());
+                            }
+                            Err(_) => status.set("Не удалось прочитать настройки.".into()),
+                        }
+                    }
+                    Ok(resp) if resp.status() == 401 => status.set("Войдите в аккаунт, чтобы настроить провайдера.".into()),
+                    _ => status.set("Не удалось загрузить настройки провайдера.".into()),
+                }
+            });
+        }
+    });
+
+    let select_provider = move |value: String| {
+        provider.set(value.clone());
+        model.set(if value == "gemini" { "gemini-2.5-flash" } else { "llama-3.3-70b-versatile" }.into());
+        configured.set(false);
+        status.set(String::new());
+    };
+
+    let save_provider = move |_| {
+        let p = provider.get_untracked();
+        let m = model.get_untracked();
+        status.set("Сохраняем выбор…".into());
+        spawn_local(async move {
+            let body = serde_json::json!({"action":"select","provider":p,"model":m});
+            match Request::post("/api/provider-settings").json(&body).unwrap().send().await {
+                Ok(resp) if resp.ok() => status.set("Провайдер и модель сохранены.".into()),
+                _ => status.set("Не удалось сохранить выбор провайдера.".into()),
+            }
+        });
+    };
+
+    let save_key = move |_| {
+        let p = provider.get_untracked();
+        let secret = key.get_untracked().trim().to_string();
+        if secret.len() < 8 {
+            status.set("Введите корректный API-ключ.".into());
+            return;
+        }
+        status.set("Сохраняем ключ в Supabase Vault…".into());
+        spawn_local(async move {
+            let body = serde_json::json!({"action":"set_key","provider":p,"key":secret});
+            match Request::post("/api/provider-settings").json(&body).unwrap().send().await {
+                Ok(resp) if resp.ok() => {
+                    key.set(String::new());
+                    configured.set(true);
+                    status.set("Ключ сохранён в защищённом хранилище.".into());
+                }
+                _ => status.set("Не удалось сохранить API-ключ.".into()),
+            }
+        });
+    };
+
+    let delete_key = move |_| {
+        let p = provider.get_untracked();
+        status.set("Удаляем ключ…".into());
+        spawn_local(async move {
+            let body = serde_json::json!({"action":"delete_key","provider":p});
+            match Request::post("/api/provider-settings").json(&body).unwrap().send().await {
+                Ok(resp) if resp.ok() => {
+                    configured.set(false);
+                    key.set(String::new());
+                    status.set("Ключ удалён из Vault.".into());
+                }
+                _ => status.set("Не удалось удалить ключ.".into()),
+            }
+        });
+    };
+
+    view! {
+        <section class=pgc(ctx, Page::Providers)>
+            {ph(ctx, || "AI-провайдеры".into(), move || ctx.page.set(Page::Main))}
+            <div class="sc">
+                <p class="hint">"Выберите модель и сохраните личный API-ключ. Ключ шифруется Supabase Vault и никогда не возвращается в браузер."</p>
+                <label class="fl" for="provider-select">"Провайдер"</label>
+                <select class="fi" id="provider-select" prop:value=move || provider.get()
+                    on:change=move |e| select_provider(event_target_value(&e))>
+                    <option value="groq">"Groq"</option>
+                    <option value="gemini">"Google Gemini"</option>
+                </select>
+                <label class="fl" for="provider-model">"Модель"</label>
+                <select class="fi" id="provider-model" prop:value=move || model.get()
+                    on:change=move |e| model.set(event_target_value(&e))>
+                    <Show when=move || provider.get() == "groq">
+                        <option value="llama-3.3-70b-versatile">"Llama 3.3 70B"</option>
+                        <option value="openai/gpt-oss-120b">"GPT OSS 120B"</option>
+                    </Show>
+                    <Show when=move || provider.get() == "gemini">
+                        <option value="gemini-2.5-flash">"Gemini 2.5 Flash"</option>
+                        <option value="gemini-2.5-pro">"Gemini 2.5 Pro"</option>
+                    </Show>
+                </select>
+                <button class="cta" on:click=save_provider>"Сохранить провайдера"</button>
+                <div class="grp" style="margin-top:14px">
+                    <div class="row">
+                        <span class="rt">"API-ключ"</span>
+                        <span class="rv">{move || if configured.get() { "Сохранён" } else { "Не добавлен" }}</span>
+                    </div>
+                </div>
+                <label class="fl" for="provider-key">"Новый API-ключ"</label>
+                <input class="fi" id="provider-key" type="password" autocomplete="off"
+                    placeholder="Вставьте ключ провайдера"
+                    prop:value=move || key.get()
+                    on:input=move |e| key.set(event_target_value(&e))/>
+                <button class="cta" on:click=save_key>"Сохранить ключ в Vault"</button>
+                <Show when=move || configured.get()>
+                    <button class="fi rst" on:click=delete_key>"Удалить сохранённый ключ"</button>
+                </Show>
+                <p class="hint">{move || status.get()}</p>
+                <p class="hint">"Ключи Groq и Gemini хранятся отдельно. Переключение провайдера не удаляет другой ключ."</p>
             </div>
         </section>
     }
