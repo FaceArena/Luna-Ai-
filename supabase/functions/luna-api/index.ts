@@ -141,11 +141,6 @@ Deno.serve(async (req: Request) => {
         keep: body.keep !== false,
         glass: Math.max(0, Math.min(100, Number(body.glass) || 0)),
       };
-      const words = promptWordCount(settings.who) + promptWordCount(settings.rules);
-      const limit = promptLimit(user);
-      if (words > limit) {
-        return json(402, { error: "Лимит слов в персональных инструкциях превышен.", words, limit });
-      }
       const { error } = await userClient.from("luna_personal_settings").upsert({
         user_id: user.id, settings, updated_at: new Date().toISOString(),
       }, { onConflict: "user_id" });
