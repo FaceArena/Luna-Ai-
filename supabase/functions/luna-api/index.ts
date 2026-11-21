@@ -126,67 +126,7 @@ Deno.serve(async (req: Request) => {
       return error ? text(502, "Не удалось сохранить выбор тарифа.") : new Response(null, { status: 204, headers: cors });
     }
 
-    if (path === "/api/provider-settings" && method === "GET") {
-      const { data, error } = await admin.from("luna_provider_settings")
-        .select("provider,model,vault_secret_id,updated_at").eq("user_id", user.id)
-        .order("updated_at", { ascending: false });
-      if (error) return json(500, { error: "Unable to load provider settings" });
-      const rows = data ?? [];
-      return json(200, {
-        activeProvider: rows[0]?.provider ?? null,
-        providers: rows.map((r) => ({ provider: r.provider, model: r.model, configured: Boolean(r.vault_secret_id) })),
-      });
-    }
-
-    if (path === "/api/provider-settings" && method === "POST") {
-      const body = await req.json();
-      const provider = body.provider;
-      if (!["groq", "gemini"].includes(provider)) return json(400, { error: "Unsupported provider" });
-      if (body.action === "select") {
-        const model = String(body.model ?? "").trim();
-        const allowed = provider === "groq"
-          ? ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
-          : ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
-        if (!allowed.includes(model)) return json(400, { error: "Unsupported model" });
-        const { data: existing, error: readError } = await admin.from("luna_provider_settings")
-          .select("user_id").eq("user_id", user.id).eq("provider", provider).maybeSingle();
-        if (readError) throw readError;
-        const write = existing
-          ? await admin.from("luna_provider_settings").update({ model, updated_at: new Date().toISOString() })
-              .eq("user_id", user.id).eq("provider", provider)
-          : await admin.from("luna_provider_settings").insert({ user_id: user.id, provider, model });
-        if (write.error) throw write.error;
-        return json(200, { ok: true });
-      }
-      if (body.action === "set_key") {
-        const key = typeof body.key === "string" ? body.key.trim() : "";
-        if (key.length < 8 || key.length > 4096) return json(400, { error: "Invalid API key" });
-        const model = String(body.model ?? "").trim();
-        const allowed = provider === "groq"
-          ? ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
-          : ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
-        if (!allowed.includes(model)) return json(400, { error: "Unsupported model" });
-        const { data: existing, error: readError } = await admin.from("luna_provider_settings")
-          .select("user_id").eq("user_id", user.id).eq("provider", provider).maybeSingle();
-        if (readError) throw readError;
-        const write = existing
-          ? await admin.from("luna_provider_settings").update({ model, updated_at: new Date().toISOString() })
-              .eq("user_id", user.id).eq("provider", provider)
-          : await admin.from("luna_provider_settings").insert({ user_id: user.id, provider, model });
-        if (write.error) throw write.error;
-        const { error } = await admin.rpc("luna_vault_set_secret", {
-          p_user_id: user.id, p_provider: provider, p_secret: key,
-        });
-        if (error) throw error;
-        return json(200, { ok: true });
-      }
-      if (body.action === "delete_key") {
-        const { error } = await admin.rpc("luna_vault_delete_secret", { p_user_id: user.id, p_provider: provider });
-        if (error) throw error;
-        return json(200, { ok: true });
-      }
-      return json(400, { error: "Unknown provider settings action" });
-    }
+    if (path === "/api/provider-settings") return text(404, "Маршрут не найден.");
 
     if (path === "/api/chat" && method === "POST") {
       const now = Date.now();
@@ -199,16 +139,13 @@ Deno.serve(async (req: Request) => {
       if (!messages.length || messages.length > 20 || messages.some((m: any) =>
         !["user", "assistant"].includes(m.role) || typeof m.content !== "string" || m.content.length > 16000))
         return text(400, "Слишком длинный запрос или некорректная история.");
-      const { data: settings, error } = await admin.from("luna_provider_settings")
-        .select("provider,model,vault_secret_id,updated_at").eq("user_id", user.id)
-        .order("updated_at", { ascending: false }).limit(1);
-      if (error) throw error;
-      const setting = settings?.[0];
-      if (!setting || !setting.vault_secret_id) return text(503, "Для выбранного AI-провайдера не сохранён API-ключ.");
-      const { data: apiKey, error: keyError } = await admin.rpc("luna_vault_get_secret", {
-        p_user_id: user.id, p_provider: setting.provider,
+      const { data: apiKey, error: keyError } = await admin.rpc("luna_get_global_secret", {
+        p_name: "luna_global_groq_api_key",
       });
-      if (keyError || !apiKey) return text(503, "Не удалось получить ключ AI-провайдера.");
+      if (keyError || typeof apiKey !== "string" || !apiKey) {
+        return text(503, "AI-сервис временно недоступен. Попробуйте позже.");
+      }
+      const model = "openai/gpt-oss-120b";
       const system = [
         `You are ${String(body.name ?? "Luna").slice(0, 80)}.`,
         `Role: ${String(body.who ?? "").slice(0, 1000)}.`,
@@ -216,32 +153,19 @@ Deno.serve(async (req: Request) => {
         `Response length: ${String(body.len ?? "normal").slice(0, 40)}.`,
         `User name: ${String(body.you ?? "").slice(0, 80)}.`,
       ].join(" ");
-      let upstream: Response;
-      if (setting.provider === "groq") {
-        const all = [{ role: "system", content: system }, ...messages];
-        upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ model: setting.model, messages: all, stream: false }),
-        });
-      } else {
-        const contents = messages.map((m: any) => ({
-          role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }],
-        }));
-        upstream = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${setting.model}:generateContent`,
-          { method: "POST", headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
-            body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: system }] } }) },
-        );
-      }
+      const all = [{ role: "system", content: system }, ...messages];
+      const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages: all, stream: false }),
+      });
       if (!upstream.ok) {
         if ([401, 403].includes(upstream.status)) return text(422, "Провайдер отклонил API-ключ.");
         if (upstream.status === 429) return text(429, "Лимит запросов AI-провайдера.");
         return text(502, "Не удалось получить ответ AI-провайдера.");
       }
       const result = await upstream.json();
-      const answer = setting.provider === "groq"
-        ? result?.choices?.[0]?.message?.content
-        : result?.candidates?.[0]?.content?.parts?.[0]?.text;
+      const answer = result?.choices?.[0]?.message?.content;
       return typeof answer === "string" ? text(200, answer) : text(502, "Некорректный ответ AI-провайдера.");
     }
 
