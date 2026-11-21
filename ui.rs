@@ -857,7 +857,6 @@ fn Log() -> impl IntoView {
     };
     create_effect(move |_| {
         let _ = ctx.log.get();
-        let _ = ctx.stream.get();
         if near_bottom.get_untracked() {
             show_jump.set(false);
             scroll_bottom(true);
@@ -865,9 +864,15 @@ fn Log() -> impl IntoView {
             show_jump.set(true);
         }
     });
+    create_effect(move |_| {
+        let stream_now = ctx.stream.get();
+        if stream_now.is_some() && near_bottom.get_untracked() {
+            scroll_bottom(false);
+        }
+    });
     let resize_cb = Closure::<dyn FnMut(js_sys::Array, web_sys::ResizeObserver)>::new(move |_, _| {
         if near_bottom.get_untracked() {
-            scroll_bottom(true);
+            scroll_bottom(false);
         }
     });
     if let Ok(observer) = web_sys::ResizeObserver::new(resize_cb.as_ref().unchecked_ref()) {
