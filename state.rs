@@ -505,9 +505,9 @@ impl Ctx {
                 }
                 let Ok(v) = chunk else { break };
                 pending.extend(js_sys::Uint8Array::new(&v).to_vec());
-                while let Some(pos) = pending.iter().position(|b| *b == b'\\n') {
+                while let Some(pos) = pending.iter().position(|b| *b == b'\n') {
                     let mut line: Vec<u8> = pending.drain(..=pos).collect();
-                    while matches!(line.last(), Some(b'\\n' | b'\\r')) { line.pop(); }
+                    while matches!(line.last(), Some(b'\n' | b'\r')) { line.pop(); }
                     let line = String::from_utf8_lossy(&line);
                     let Some(data) = line.strip_prefix("data:") else { continue };
                     let data = data.trim();
