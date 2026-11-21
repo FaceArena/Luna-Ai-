@@ -100,7 +100,7 @@ Deno.serve(async (req: Request) => {
 
     if (method === "GET" && path === "/api/me") {
       return json(200, {
-        name: String(user.user_metadata?.name ?? "Luna user"),
+        name: String(user.user_metadata?.name ?? user.user_metadata?.full_name ?? user.user_metadata?.preferred_username ?? user.user_metadata?.username ?? user.user_metadata?.given_name ?? "Пользователь Telegram").trim().slice(0, 40) || "Пользователь Telegram",
         email: user.email ?? "",
         plan: Math.min(2, Number(user.user_metadata?.plan ?? 0) || 0),
       });
