@@ -291,16 +291,43 @@ impl Ctx {
     }
 
     pub fn set_model(self, i: usize) {
-        self.mi.set(i);
-        ls_set("luna-model2", &i.to_string());
-        if self.me.get_untracked().is_some() {
-            self.me.update(|m| {
-                if let Some(m) = m {
-                    m.plan = i;
-                }
-            });
-            spawn_local(api::set_plan(i));
+        if i > 2 || self.mi.get_untracked() == i {
+            return;
         }
+        let Some(_) = self.me.get_untracked() else {
+            if i > 0 {
+                self.say("Чтобы выбрать премиум-тариф, сначала войдите через Telegram.");
+                self.open_sheet(Page::Acc);
+            } else {
+                self.mi.set(0);
+                ls_set("luna-model2", "0");
+            }
+            return;
+        };
+        let previous = self.mi.get_untracked();
+        spawn_local(async move {
+            match api::set_plan(i).await {
+                Ok(()) => {
+                    self.mi.set(i);
+                    ls_set("luna-model2", &i.to_string());
+                    self.me.update(|m| {
+                        if let Some(m) = m {
+                            m.plan = i;
+                        }
+                    });
+                    self.say("Тариф успешно изменён.");
+                }
+                Err(message) => {
+                    self.mi.set(previous);
+                    let notice = if message.contains("403") || message.contains("подпишитесь") {
+                        "Премиум доступен только подписчикам Telegram-канала Luna AI."
+                    } else {
+                        "Не удалось изменить тариф. Проверьте подключение и попробуйте снова."
+                    };
+                    self.say(notice);
+                }
+            }
+        });
     }
 
     pub fn open_sheet(self, page: Page) {
