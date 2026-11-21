@@ -223,7 +223,7 @@ Deno.serve(async (req: Request) => {
       if (error) return text(502, "Не удалось загрузить память.");
       return json(200, data ?? []);
     }
-    const memoryMatch = path.match(/^\\/api\\/memories\\/([0-9a-fA-F-]{36})$/);
+    const memoryMatch = path.match(new RegExp("^/api/memories/([0-9a-fA-F-]{36})$"));
     if (memoryMatch && method === "PUT") {
       const body = await req.json().catch(() => null);
       if (!body || typeof body !== "object") return text(400, "Некорректная запись памяти.");
