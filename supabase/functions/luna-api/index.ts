@@ -115,6 +115,42 @@ const promptLimit = (user: any) => {
 
 type SubscriptionTier = "free" | "luna" | "luna_pro";
 const membershipCache = new Map<string, { member: boolean; checkedAt: number }>();
+const membershipFailures = new Map<string, "missing_telegram_id">();
+let telegramProviderConfigSyncedAt = 0;
+
+// Apply the Telegram claim allowlist through the Auth Admin API before exchanging
+// a new login code. This avoids relying only on a direct database-row edit.
+async function ensureTelegramProviderClaims(base: string, service: string): Promise<boolean> {
+  if (Date.now() - telegramProviderConfigSyncedAt < 5 * 60_000) return true;
+  try {
+    const response = await fetch(`${base}/auth/v1/admin/custom-providers/custom:telegram`, {
+      method: "PUT",
+      headers: {
+        apikey: service,
+        Authorization: `Bearer ${service}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        scopes: ["openid", "profile"],
+        custom_claims_allowlist: ["id"],
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      console.error("luna Telegram provider claim sync failed", {
+        httpStatus: response.status,
+        detail: detail.slice(0, 300),
+      });
+      return false;
+    }
+    telegramProviderConfigSyncedAt = Date.now();
+    return true;
+  } catch (error) {
+    console.error("luna Telegram provider claim sync failed", error instanceof Error ? error.message : "unknown");
+    return false;
+  }
+}
 
 async function isLunaChannelMember(admin: any, user: any): Promise<boolean> {
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
@@ -144,6 +180,7 @@ async function isLunaChannelMember(admin: any, user: any): Promise<boolean> {
   ).trim();
   const telegramUserId = Number(telegramId);
   if (!/^\d{1,16}$/.test(telegramId) || !Number.isSafeInteger(telegramUserId) || telegramUserId <= 0) {
+    membershipFailures.set(user.id, "missing_telegram_id");
     console.warn("luna membership denied: trusted Telegram Bot API id missing or malformed", {
       identityProviders: identities.map((identity: any) => identity?.provider).filter(Boolean),
       hasBotApiId: Boolean(telegramIdentity?.identity_data?.custom_claims?.id ?? telegramIdentity?.identity_data?.id),
@@ -151,6 +188,7 @@ async function isLunaChannelMember(admin: any, user: any): Promise<boolean> {
     return false;
   }
 
+  membershipFailures.delete(user.id);
   const cached = membershipCache.get(telegramId);
   if (cached && Date.now() - cached.checkedAt < (cached.member ? 60_000 : 15_000)) {
     console.info("luna membership cache", { member: cached.member });
@@ -282,6 +320,10 @@ Deno.serve(async (req: Request) => {
           codeVerifier.length < 43 || codeVerifier.length > 128 ||
           !/^[A-Za-z0-9._~-]+$/.test(codeVerifier)) {
         return text(400, "Некорректный ответ Telegram.");
+      }
+
+      if (!(await ensureTelegramProviderClaims(base, service))) {
+        return text(503, "Не удалось обновить настройки входа через Telegram. Попробуйте позже.");
       }
 
       const tokenResponse = await fetch(`${base}/auth/v1/token?grant_type=pkce`, {
@@ -441,8 +483,12 @@ Deno.serve(async (req: Request) => {
       const body = await req.json().catch(() => null);
       const rawPlan = Number(body?.plan);
       if (!Number.isInteger(rawPlan) || rawPlan < 0 || rawPlan > 2) return text(400, "Некорректный тариф.");
-      if (rawPlan > 0 && !(await isLunaChannelMember(admin, user)))
+      if (rawPlan > 0 && !(await isLunaChannelMember(admin, user))) {
+        if (membershipFailures.get(user.id) === "missing_telegram_id") {
+          return text(409, "Данные Telegram устарели. Выйдите из аккаунта и войдите через Telegram снова, чтобы обновить проверку подписки.");
+        }
         return text(403, "Для доступа к премиум-моделям подпишитесь на Telegram-канал Luna AI.");
+      }
       const { data, error } = await userClient.auth.updateUser({ data: { plan: rawPlan } });
       if (error || !data.user) return text(502, "Не удалось сохранить выбор тарифа.");
       const subscription = await resolveSubscription(admin, data.user, rawPlan);
