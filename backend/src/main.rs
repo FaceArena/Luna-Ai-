@@ -2,7 +2,7 @@ mod providers;
 
 use axum::{routing::get, Json, Router};
 use serde_json::{json, Value};
-use std::{net::SocketAddr, time::Duration};
+use std::net::SocketAddr;
 use tower_http::trace::TraceLayer;
 
 async fn health() -> Json<Value> {
@@ -24,11 +24,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/health", get(health))
-        .layer(TraceLayer::new_for_http())
-        .layer(tower_http::cors::CorsLayer::new()
-            .allow_origin(tower_http::cors::Any)
-            .allow_methods([axum::http::Method::GET])
-            .allow_headers([axum::http::header::CONTENT_TYPE]));
+        .layer(TraceLayer::new_for_http());
 
     let port = std::env::var("PORT")
         .ok()
@@ -43,7 +39,6 @@ async fn main() {
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
         })
         .await
         .expect("Luna API server failed");
