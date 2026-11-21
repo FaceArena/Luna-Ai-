@@ -73,6 +73,7 @@ pub struct Row {
 pub enum Page {
     Main,
     Ai,
+    Providers,
     Acc,
     Plan,
     About,
