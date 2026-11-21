@@ -806,9 +806,39 @@ fn Log() -> impl IntoView {
     let empty = create_memo(move |_| ctx.log.with(|l| l.is_empty()) && !streaming.get());
     let last_ai_id = create_memo(move |_| ctx.log.with(|l| l.iter().rev().find(|r| !r.user).map(|r| r.id)));
     let log_el = ctx.log_el;
+    let near_bottom = create_rw_signal(true);
+    let show_jump = create_rw_signal(false);
+    let scroll_bottom = move |smooth: bool| {
+        request_animation_frame(move || {
+            if let Some(el) = log_el.get_untracked() {
+                let o = web_sys::ScrollToOptions::new();
+                o.set_top(el.scroll_height() as f64);
+                o.set_behavior(if smooth { web_sys::ScrollBehavior::Smooth } else { web_sys::ScrollBehavior::Auto });
+                el.scroll_to_with_scroll_to_options(&o);
+            }
+        });
+    };
+    create_effect(move |_| {
+        let _ = ctx.log.get();
+        let _ = ctx.stream.get();
+        if near_bottom.get_untracked() {
+            show_jump.set(false);
+            scroll_bottom(true);
+        } else {
+            show_jump.set(true);
+        }
+    });
 
     view! {
-        <main id="log" node_ref=log_el>
+        <main id="log" node_ref=log_el
+              on:scroll=move |_| {
+                  if let Some(el) = log_el.get_untracked() {
+                      let distance = el.scroll_height() - el.scroll_top() - el.client_height();
+                      let at_bottom = distance <= 80;
+                      near_bottom.set(at_bottom);
+                      show_jump.set(!at_bottom);
+                  }
+              }>
             <Show when=move || empty.get()>
                 <div class="empty">
                     <div class="glass big hey" on:click=move |_| {
@@ -833,6 +863,11 @@ fn Log() -> impl IntoView {
                     </div>
                 </div>
             </Show>
+            <button class="jump glass" class:visible=move || show_jump.get()
+                    aria-label="К последнему сообщению"
+                    on:click=move |_| { near_bottom.set(true); show_jump.set(false); scroll_bottom(true); }>
+                "↓"
+            </button>
         </main>
     }
 }
@@ -904,6 +939,8 @@ fn Composer() -> impl IntoView {
                         aria-label=move || if ctx.busy.get() { "Стоп" } else { "Отправить" }
                         disabled=move || !ctx.busy.get() && draft.get().trim().is_empty()
                         on:pointerdown=move |e: web_sys::PointerEvent| e.prevent_default()
+                        on:mousedown=move |e: web_sys::MouseEvent| e.prevent_default()
+                        on:touchstart=move |e: web_sys::TouchEvent| e.prevent_default()
                         on:click=move |_| go()>
                     <svg viewBox="0 0 24 24" prop:innerHTML=move || if ctx.busy.get() { STOP } else { SEND }></svg>
                 </button>
