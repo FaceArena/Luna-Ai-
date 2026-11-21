@@ -326,10 +326,7 @@ body {
 #app {
   position: fixed;
   z-index: 1;
-  top: var(--vvt, 0px);
-  right: 0;
-  bottom: auto;
-  left: 0;
+  inset: 0;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -338,6 +335,7 @@ body {
   box-sizing: border-box;
   overflow: hidden;
   isolation: isolate;
+  padding-top: env(safe-area-inset-top, 0px);
   transition: height .25s cubic-bezier(.22, 1, .36, 1);
 }
 #shell {
@@ -353,23 +351,21 @@ body {
 #shell > main {
   flex: 1 1 auto;
   min-height: 0;
-  padding-top: 32px;
+  padding: 24px 16px 20px;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
+  overscroll-behavior: contain;
   overflow-anchor: auto;
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
   mask-image: linear-gradient(to bottom, transparent 0, #000 24px);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 24px);
 }
 #shell > footer {
   flex: 0 0 auto;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  padding: 6px 12px calc(8px + env(safe-area-inset-bottom, 0px));
 }
-#app.keyboard-open #shell > footer {
-  padding-bottom: 8px;
-}
+#app.keyboard-open #shell > footer { padding-bottom: 8px; }
 #app textarea, #app input, #app select, #app .fi {
   min-height: 16px;
   font-size: max(16px, var(--fs, 16px));
@@ -378,10 +374,9 @@ body {
   transition: height .18s cubic-bezier(.22, 1, .36, 1);
 }
 #app .msg {
-  transform-origin: bottom right;
   animation: msgIn 280ms cubic-bezier(.22, 1, .36, 1) both;
-  will-change: transform, opacity;
 }
+#app .msg.me { transform-origin: bottom right; }
 #app .msg.ai {
   transform-origin: bottom left;
   animation-delay: 60ms;
@@ -399,6 +394,45 @@ body {
   0%, 100% { opacity: .4; transform: translateY(0); }
   50% { opacity: 1; transform: translateY(-3px); }
 }
+#app .empty {
+  transition: opacity 250ms ease, transform 250ms cubic-bezier(.22, 1, .36, 1);
+}
+#app .empty.leaving {
+  opacity: 0;
+  transform: translateY(-8px) scale(.98);
+  pointer-events: none;
+}
+#app .msg.ai .tx { transition: opacity 180ms ease; }
+#log { position: relative; }
+#log .jump {
+  position: sticky;
+  z-index: 4;
+  align-self: flex-end;
+  bottom: 14px;
+  width: 42px;
+  height: 42px;
+  margin-top: -54px;
+  margin-right: 2px;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  color: var(--fg);
+  background: var(--glass2);
+  font: inherit;
+  font-size: 23px;
+  line-height: 1;
+  opacity: 0;
+  transform: translateY(8px) scale(.92);
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 220ms cubic-bezier(.34, 1.56, .64, 1), visibility 0s linear 220ms;
+}
+#log .jump.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 180ms ease, transform 220ms cubic-bezier(.34, 1.56, .64, 1), visibility 0s;
+}
 #app .send {
   transition: opacity .18s ease, transform .22s cubic-bezier(.34, 1.56, .64, 1), box-shadow .2s ease;
 }
@@ -406,10 +440,10 @@ body {
 @media (prefers-reduced-motion: reduce) {
   #app, #app *, #app *::before, #app *::after {
     scroll-behavior: auto !important;
-    animation-duration: .01ms !important;
-    animation-iteration-count: 1 !important;
+    animation: none !important;
+    transition-property: opacity !important;
     transition-duration: .01ms !important;
-    will-change: auto !important;
   }
-  #app .msg { animation-name: none; opacity: 1; transform: none; }
+  #app .msg { opacity: 1; transform: none; }
+  #app .empty.leaving { transform: none; }
 }
