@@ -558,10 +558,20 @@ fn PageAcc() -> impl IntoView {
     let nm = create_rw_signal(String::new());
     let email = create_rw_signal(String::new());
     let pass = create_rw_signal(String::new());
+    let auth_busy = create_rw_signal(false);
 
     let go = move |_| {
-        let (m, p, n) = (email.get_untracked().trim().to_string(), pass.get_untracked(), nm.get_untracked());
+        if auth_busy.get_untracked() {
+            return;
+        }
+        let (m, p, n) = (email.get_untracked().trim().to_string(), pass.get_untracked(), nm.get_untracked().trim().to_string());
         let reg = up.get_untracked();
+        if reg && n.is_empty() {
+            return err.set("Введите имя".into());
+        }
+        if reg && n.chars().count() > 40 {
+            return err.set("Имя должно быть не длиннее 40 символов".into());
+        }
         if !m.contains('@') || !m.contains('.') {
             return err.set("Введите корректную почту".into());
         }
@@ -572,9 +582,12 @@ fn PageAcc() -> impl IntoView {
             return err.set("Подтвердите согласие с условиями".into());
         }
         err.set(String::new());
+        auth_busy.set(true);
         spawn_local(async move {
             let path = if reg { "/api/register" } else { "/api/login" };
-            match api::auth(path, &serde_json::json!({ "name": n, "email": m, "pass": p })).await {
+            let result = api::auth(path, &serde_json::json!({ "name": n, "email": m, "pass": p })).await;
+            auth_busy.set(false);
+            match result {
                 Ok(me) => {
                     pass.set(String::new());
                     ctx.finish_login(me);
@@ -628,8 +641,8 @@ fn PageAcc() -> impl IntoView {
                             {doc_row(ctx, None, "Согласие на обработку данных", "consent", Page::Acc)}
                         </div>
                         <p class="err">{move || err.get()}</p>
-                        <button class="cta" on:click=go>{move || if up.get() { "Создать" } else { "Войти" }}</button>
-                        <button class="lnk" on:click=move |_| up.update(|v| *v = !*v)>
+                        <button class="cta" disabled=move || auth_busy.get() on:click=go>{move || if auth_busy.get() { "Подождите…" } else if up.get() { "Создать аккаунт" } else { "Войти" }}</button>
+                        <button class="lnk" disabled=move || auth_busy.get() on:click=move |_| { err.set(String::new()); up.update(|v| *v = !*v); }>
                             {move || if up.get() { "У меня уже есть аккаунт" } else { "Создать аккаунт" }}
                         </button>
                         <p class="hint">"Пароль хранится на сервере только в виде хеша."</p>
