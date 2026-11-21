@@ -806,3 +806,44 @@ html, body {
 
 /* Make the applied preset state explicit, not color-only. */
 .lab-item .lab-mini[aria-pressed="true"]{min-width:88px;font-weight:650}
+
+
+/* Unified composer plus menu — Luna liquid-glass surface. */
+footer{isolation:isolate}
+.bar{padding-left:6px}
+.attach{width:44px;height:44px;flex:none;border:0;border-radius:50%;display:grid;place-items:center;padding:0;background:var(--glass2)}
+.attach svg{width:21px;height:21px;fill:none;stroke:var(--fg);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.attach:active{transform:rotate(45deg) scale(.92)}
+.file-picker{display:none}
+.plus-menu{position:absolute;z-index:14;left:12px;bottom:calc(100% + 10px);width:min(360px,calc(100% - 24px));max-height:min(62vh,440px);overflow-y:auto;padding:12px;border-radius:26px;background:color-mix(in srgb,var(--bg) 48%,var(--glass));opacity:0;pointer-events:none;transform:translateY(12px) scale(.97);transform-origin:bottom left;transition:opacity .22s,transform .35s var(--ease)}
+.plus-menu.on{opacity:1;pointer-events:auto;transform:none}
+.plus-menu-head{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 9px}
+.plus-menu-head b{font-size:14px;font-weight:650}
+.plus-menu-head button,.image-attachment button{width:32px;height:32px;border:0;border-radius:50%;background:var(--glass2);color:var(--fg);font-size:20px;line-height:1}
+.plus-option{display:flex;align-items:center;gap:12px;width:100%;min-height:62px;padding:8px 10px;border:0;border-radius:18px;background:transparent;color:var(--fg);text-align:left;font:inherit}
+.plus-option:active,.plus-preset:active{background:var(--glass2)}
+.plus-option-icon{width:42px;height:42px;flex:none;display:grid;place-items:center;border-radius:15px;background:linear-gradient(145deg,color-mix(in srgb,var(--a) 38%,var(--glass)),color-mix(in srgb,var(--b) 28%,var(--glass)));box-shadow:inset 0 1px 0 var(--edge)}
+.plus-option-icon svg{width:20px;height:20px;fill:none;stroke:var(--fg);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.plus-option b,.plus-option small{display:block}
+.plus-option b{font-size:13px;font-weight:600}
+.plus-option small{margin-top:2px;color:var(--fg2);font-size:11px;line-height:1.35}
+.plus-menu-section{display:flex;flex-direction:column;gap:2px;margin:10px 4px 6px;padding-top:10px;border-top:1px solid var(--glass2)}
+.plus-menu-section>span{font-size:13px;font-weight:600}
+.plus-menu-section small,.plus-current,.plus-empty{color:var(--fg2);font-size:11px;line-height:1.4}
+.plus-current{padding:5px 5px 7px}
+.plus-empty{margin:4px 5px 8px}
+.plus-preset{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;padding:8px 10px;border:0;border-radius:15px;background:transparent;color:var(--fg);font:inherit;text-align:left}
+.plus-preset span{min-width:0;overflow-wrap:anywhere;font-size:12px}
+.plus-preset small{flex:none;color:var(--fg2);font-size:10px}
+.plus-preset.active{background:color-mix(in srgb,var(--b) 24%,var(--glass2));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--b) 45%,transparent)}
+.image-attachment{display:flex;align-items:center;gap:10px;width:min(760px,calc(100% - 24px));margin:0 auto 8px;padding:7px 10px;border-radius:17px}
+.image-attachment img{width:42px;height:42px;flex:none;object-fit:cover;border-radius:11px}
+.image-attachment span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--fg2)}
+.image-attachment button{flex:none}
+@media(max-width:520px){
+  footer{padding:6px 10px calc(env(safe-area-inset-bottom,0px) + 10px)}
+  .bar{gap:6px;padding:5px;border-radius:28px}
+  .attach{width:42px;height:42px}
+  .plus-menu{left:10px;width:min(360px,calc(100% - 20px));max-height:min(58vh,420px);padding:10px;border-radius:23px}
+}
+@media(prefers-reduced-motion:reduce){.plus-menu{transition:none}}
