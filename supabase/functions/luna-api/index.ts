@@ -47,33 +47,37 @@ Deno.serve(async (req: Request) => {
       const email = typeof body.email === "string" ? body.email.trim() : "";
       const password = typeof body.pass === "string" ? body.pass : "";
       const name = typeof body.name === "string" ? body.name.trim().slice(0, 40) : "";
-      if (!email || email.length > 254 || password.length < 8 || password.length > 128 || !name)
-        return text(400, "Проверьте имя, почту и пароль (8–128 символов).");
+      const validEmail = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);
+      if (!validEmail || email.length > 254 || password.length < 8 || password.length > 128 || !name)
+        return text(400, "Проверьте имя, адрес почты и пароль (8–128 символов).");
       const client = createClient(base, anon, { auth: { persistSession: false, autoRefreshToken: false } });
       const { data, error } = await client.auth.signUp({ email, password, options: { data: { name } } });
       if (error) {
         const message = error.message.toLowerCase();
-        if (message.includes("already registered") || message.includes("already been registered")) {
+        const code = String((error as any).code ?? "");
+        if (code === "user_already_exists" || message.includes("already registered") || message.includes("already been registered")) {
           return text(409, "Аккаунт с этой почтой уже существует. Войдите.");
         }
         if (message.includes("invalid") && message.includes("email")) {
           return text(400, "Проверьте адрес электронной почты.");
         }
-        if (message.includes("password")) {
+        if (message.includes("password") || code.includes("password")) {
           return text(400, "Пароль не прошёл проверку безопасности. Используйте более надёжный пароль.");
         }
         return text(400, "Не удалось создать аккаунт. Проверьте данные и попробуйте ещё раз.");
       }
-      if (!data.session) return text(409, "Аккаунт создан. Проверьте почту и подтвердите адрес, затем войдите.");
+      if (!data.session) return json(202, { email, status: "confirmation_required" });
       return json(200, { name, email, plan: 0 }, { "Set-Cookie": sessionCookie(data.session.access_token) });
     }
 
     if (method === "POST" && path === "/api/login") {
-      const body = await req.json();
+      const body = await req.json().catch(() => null);
+      const email = typeof body?.email === "string" ? body.email.trim() : "";
+      const password = typeof body?.pass === "string" ? body.pass : "";
+      if (!email || email.length > 254 || password.length < 8 || password.length > 128)
+        return text(400, "Введите корректную почту и пароль (8–128 символов).");
       const client = createClient(base, anon, { auth: { persistSession: false, autoRefreshToken: false } });
-      const { data, error } = await client.auth.signInWithPassword({
-        email: String(body.email ?? "").trim(), password: String(body.pass ?? ""),
-      });
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
       if (error || !data.session || !data.user) return text(401, "Неверная почта или пароль.");
       const name = String(data.user.user_metadata?.name ?? "Luna user");
       const plan = Math.min(2, Number(data.user.user_metadata?.plan ?? 0) || 0);
