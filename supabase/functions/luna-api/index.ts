@@ -133,7 +133,7 @@ Deno.serve(async (req: Request) => {
       if (error) return json(500, { error: "Unable to load provider settings" });
       const rows = data ?? [];
       return json(200, {
-        activeProvider: rows.find((r) => r.vault_secret_id)?.provider ?? rows[0]?.provider ?? null,
+        activeProvider: rows[0]?.provider ?? null,
         providers: rows.map((r) => ({ provider: r.provider, model: r.model, configured: Boolean(r.vault_secret_id) })),
       });
     }
@@ -201,10 +201,10 @@ Deno.serve(async (req: Request) => {
         return text(400, "Слишком длинный запрос или некорректная история.");
       const { data: settings, error } = await admin.from("luna_provider_settings")
         .select("provider,model,vault_secret_id,updated_at").eq("user_id", user.id)
-        .not("vault_secret_id", "is", null).order("updated_at", { ascending: false }).limit(1);
+        .order("updated_at", { ascending: false }).limit(1);
       if (error) throw error;
       const setting = settings?.[0];
-      if (!setting) return text(503, "AI-провайдер не настроен. Добавьте API-ключ в настройках.");
+      if (!setting || !setting.vault_secret_id) return text(503, "Для выбранного AI-провайдера не сохранён API-ключ.");
       const { data: apiKey, error: keyError } = await admin.rpc("luna_vault_get_secret", {
         p_user_id: user.id, p_provider: setting.provider,
       });
