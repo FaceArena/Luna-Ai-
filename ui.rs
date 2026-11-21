@@ -1,7 +1,16 @@
 use crate::{api, data::data, state::*};
 use leptos::*;
 use std::time::Duration;
-use wasm_bindgen::{closure::Closure, JsCast};
+use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast};
+
+#[wasm_bindgen]
+extern "C" {
+    type LunaResizeObserver;
+    #[wasm_bindgen(constructor, js_name = ResizeObserver)]
+    fn new_resize_observer(callback: &js_sys::Function) -> LunaResizeObserver;
+    #[wasm_bindgen(method, js_name = observe)]
+    fn observe_resize(this: &LunaResizeObserver, target: &web_sys::Element);
+}
 
 const CHEV: &str = r#"<path d="m9 6 6 6-6 6"/>"#;
 const UD: &str = r#"<path d="m8 9 4-4 4 4"/><path d="m8 15 4 4 4-4"/>"#;
@@ -870,21 +879,20 @@ fn Log() -> impl IntoView {
             scroll_bottom(false);
         }
     });
-    let resize_cb = Closure::<dyn FnMut(js_sys::Array, web_sys::ResizeObserver)>::new(move |_, _| {
+    let resize_cb = Closure::<dyn FnMut(js_sys::Array, JsValue)>::new(move |_, _| {
         if near_bottom.get_untracked() {
             scroll_bottom(false);
         }
     });
-    if let Ok(observer) = web_sys::ResizeObserver::new(resize_cb.as_ref().unchecked_ref()) {
-        let observer_ref = observer.clone();
-        request_animation_frame(move || {
-            if let Some(content) = document().get_element_by_id("messages-content") {
-                let _ = observer_ref.observe(&content);
-            }
-        });
-        resize_cb.forget();
-        std::mem::forget(observer);
-    }
+    let observer = new_resize_observer(resize_cb.as_ref().unchecked_ref());
+    let observer_ref = observer;
+    request_animation_frame(move || {
+        if let Some(content) = document().get_element_by_id("messages-content") {
+            observe_resize(&observer_ref, &content);
+        }
+    });
+    resize_cb.forget();
+    std::mem::forget(observer_ref);
 
     view! {
         <main id="log" node_ref=log_el
