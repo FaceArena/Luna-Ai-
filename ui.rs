@@ -630,18 +630,18 @@ fn PageAcc() -> impl IntoView {
                                 <span>"Чтобы хранить чаты и писать ИИ"</span>
                             </div>
                         </div>
-                        <form on:submit=move |e: web_sys::SubmitEvent| { e.prevent_default(); go(); }>
+                        <form on:submit=move |e| { e.prevent_default(); go(); }>
                             <Show when=move || up.get()>
                                 <label class="fl" for="a-name">"Имя"</label>
-                                <input class="fi" id="a-name" maxlength="40" autocomplete="name" prop:value=move || nm.get() on:input=move |e| nm.set(event_target_value(&e))/ >
+                                <input class="fi" id="a-name" maxlength="40" autocomplete="name" prop:value=move || nm.get() on:input=move |e| nm.set(event_target_value(&e))/>
                             </Show>
                             <label class="fl" for="a-mail">"Электронная почта"</label>
                             <input class="fi" id="a-mail" type="email" inputmode="email" autocomplete="email" required placeholder="name@mail.com"
-                                   prop:value=move || email.get() on:input=move |e| email.set(event_target_value(&e))/ >
+                                   prop:value=move || email.get() on:input=move |e| email.set(event_target_value(&e))/>
                             <label class="fl" for="a-pass">"Пароль"</label>
                             <input class="fi" id="a-pass" type="password" minlength="8" maxlength="128" required
                                    autocomplete=move || if up.get() { "new-password" } else { "current-password" }
-                                   prop:value=move || pass.get() on:input=move |e| pass.set(event_target_value(&e))/ >
+                                   prop:value=move || pass.get() on:input=move |e| pass.set(event_target_value(&e))/>
                             <Show when=move || up.get()>
                                 <div class="grp" style="margin-top:14px">
                                     <div class="row" on:click=move |_| ok.update(|v| *v = !*v)>
