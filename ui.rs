@@ -473,7 +473,7 @@ fn PageMain() -> impl IntoView {
         .map(|(k, m)| (k.to_string(), format!("{}{}", m.n, if m.pro { " (платная)" } else { "" })))
         .collect();
     let theme_opts: Vec<(String, String)> =
-        [("auto", "По умолчанию"), ("dark", "Тёмная"), ("light", "Светлая")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+        [("auto", "По умолчанию"), ("dark", "Тёмная"), ("black", "Полностью чёрная"), ("light", "Светлая")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
     let fs_opts: Vec<(String, String)> =
         [("s", "Мелкий"), ("m", "Обычный"), ("l", "Крупный")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
 
@@ -512,7 +512,7 @@ fn PageMain() -> impl IntoView {
 
                 <h3>"Лаборатория"</h3>
                 <div class="grp">
-                    {nav_row("bolt", || "Лаборатория".into(), || "Персоны · Лорбуки · Пресеты".into(), move || ctx.open_page(Page::Lab))}
+                    {nav_row("lock", || "Лаборатория".into(), || "Скоро".into(), move || ctx.open_page(Page::Lab))}
                 </div>
 
                 <h3>"Подписка"</h3>
@@ -736,206 +736,26 @@ fn PagePlan() -> impl IntoView {
 #[component]
 fn PageLab() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
-    let tab = create_rw_signal("personas".to_string());
-    let persona_name = create_rw_signal(String::new());
-    let preset_name = create_rw_signal(String::new());
-    let preset_instructions = create_rw_signal(String::new());
-    let preset_len = create_rw_signal("normal".to_string());
-    let lore_name = create_rw_signal(String::new());
-    let lore_keywords = create_rw_signal(String::new());
-    let lore_content = create_rw_signal(String::new());
-
-    let add_persona = move |_| {
-        let label = persona_name.get_untracked().trim().to_string();
-        if label.is_empty() {
-            ctx.say("Укажите название персоны.");
-            return;
-        }
-        let current = ctx.cfg.get_untracked();
-        let id = format!("persona-{}", js_sys::Date::now() as u64);
-        ctx.cfg.update(|cfg| cfg.lab.personas.push(LabPersona {
-            id, title: label, name: current.name.clone(), who: current.who.clone(), rules: current.rules.clone(),
-        }));
-        persona_name.set(String::new());
-        ctx.say("Персона сохранена.");
-    };
-
-    let add_preset = move |_| {
-        let label = preset_name.get_untracked().trim().to_string();
-        if label.is_empty() {
-            ctx.say("Укажите название пресета.");
-            return;
-        }
-        let id = format!("preset-{}", js_sys::Date::now() as u64);
-        let len = preset_len.get_untracked();
-        let instructions = preset_instructions.get_untracked().trim().to_string();
-        ctx.cfg.update(|cfg| cfg.lab.presets.push(LabPreset { id, name: label, len, instructions }));
-        preset_name.set(String::new());
-        preset_instructions.set(String::new());
-        ctx.say("Пресет сохранён.");
-    };
-
-    let add_lorebook = move |_| {
-        let label = lore_name.get_untracked().trim().to_string();
-        let content = lore_content.get_untracked().trim().to_string();
-        let keywords = lore_keywords.get_untracked().split(',').map(|v| v.trim().to_string())
-            .filter(|v| !v.is_empty()).take(20).collect::<Vec<_>>();
-        if label.is_empty() || content.is_empty() || keywords.is_empty() {
-            ctx.say("Заполните название, ключевые слова и содержание лорбука.");
-            return;
-        }
-        let id = format!("lore-{}", js_sys::Date::now() as u64);
-        ctx.cfg.update(|cfg| cfg.lab.lorebooks.push(LabLorebook {
-            id, name: label, keywords, content, enabled: true,
-        }));
-        lore_name.set(String::new());
-        lore_keywords.set(String::new());
-        lore_content.set(String::new());
-        ctx.say("Запись лорбука сохранена.");
-    };
+    let mascot = format!(
+        "{}<g class=\"wv\"><path d=\"M72 72 Q82 68 82 58 L82 48\"/><path d=\"M77 49 L82 42 L87 49\"/><path d=\"M82 43 L82 38\"/></g>",
+        data().rb[0]
+    );
 
     view! {
         <section class=pgc(ctx, Page::Lab)>
             {ph(ctx, || "Лаборатория".into(), move || ctx.open_page(Page::Main))}
-            <div class="sc lab-sc">
-                <div class="lab-intro">
-                    <div class="lab-mark">{rb(ctx.mi.get())}</div>
-                    <div>
-                        <b>"Настрой свою Luna"</b>
-                        <p>"Персонажи, знания и стиль ответа — в одном месте."</p>
+            <div class="sc lab-sc lab-locked">
+                <div class="lab-locked-content">
+                    <div class="lab-lock-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" inner_html=LOCK></svg>
                     </div>
+                    <div class="lab-coming-mascot" aria-hidden="true">
+                        <svg class="rb" viewBox="0 0 100 100" inner_html=mascot.clone()></svg>
+                    </div>
+                    <span class="lab-coming-label">"СКОРО"</span>
+                    <h2>"Лаборатория временно закрыта"</h2>
+                    <p>"Мы готовим обновление. Все инструменты лаборатории пока недоступны."</p>
                 </div>
-                <div class="lab-tabs" role="group" aria-label="Разделы лаборатории">
-                    <button type="button" aria-pressed=move || tab.get() == "personas" class:on=move || tab.get() == "personas" on:click=move |_| tab.set("personas".into())>"Персоны"</button>
-                    <button type="button" aria-pressed=move || tab.get() == "lore" class:on=move || tab.get() == "lore" on:click=move |_| tab.set("lore".into())>"Лорбуки"</button>
-                    <button type="button" aria-pressed=move || tab.get() == "presets" class:on=move || tab.get() == "presets" on:click=move |_| tab.set("presets".into())>"Пресеты"</button>
-                    <button type="button" aria-pressed=move || tab.get() == "vectors" class:on=move || tab.get() == "vectors" on:click=move |_| tab.set("vectors".into())>"Embeddings"</button>
-                    <button type="button" aria-pressed=move || tab.get() == "plugins" class:on=move || tab.get() == "plugins" on:click=move |_| tab.set("plugins".into())>"Плагины"</button>
-                </div>
-                {move || match tab.get().as_str() {
-                    "personas" => view! {
-                        <div class="lab-panel" id="lab-panel" aria-live="polite">
-                            <div class="lab-heading"><b>"Персоны"</b><span>{move || format!("{} сохранено", ctx.cfg.get().lab.personas.len())}</span></div>
-                            <p class="hint">"Сохрани текущую личность Luna как отдельную персону. Применение заменит активное имя и инструкции, но не удалит сохранённые профили."</p>
-                            <label class="fl" for="lab-persona-name">"Название новой персоны"</label>
-                            <input class="fi" id="lab-persona-name" maxlength="60" placeholder="Например, Детектив" prop:value=move || persona_name.get() on:input=move |e| persona_name.set(event_target_value(&e))/>
-                            <button class="cta lab-action" type="button" on:click=add_persona>"Сохранить текущую персону"</button>
-                            <div class="lab-list">
-                                {move || ctx.cfg.get().lab.personas.iter().map(|persona| {
-                                    let item = persona.clone();
-                                    let apply = persona.clone();
-                                    let delete_id = persona.id.clone();
-                                    view! {
-                                        <div class="lab-item">
-                                            <div class="lab-item-copy"><b>{item.title.clone()}</b><span>{if item.who.is_empty() { "Без описания".to_string() } else { item.who.chars().take(90).collect::<String>() }}</span></div>
-                                            <button class="lab-mini" type="button" on:click=move |_| ctx.cfg.update(|cfg| {
-                                                cfg.name = apply.name.clone(); cfg.who = apply.who.clone(); cfg.rules = apply.rules.clone();
-                                            })>"Применить"</button>
-                                            <button class="lab-remove" type="button" aria-label="Удалить персону" on:click=move |_| ctx.cfg.update(|cfg| cfg.lab.personas.retain(|p| p.id != delete_id))>"×"</button>
-                                        </div>
-                                    }
-                                }).collect_view()}
-                            </div>
-                        </div>
-                    }.into_view(),
-                    "lore" => view! {
-                        <div class="lab-panel" id="lab-panel" role="tabpanel" aria-live="polite">
-                            <div class="lab-heading"><b>"Лорбуки"</b><span>{move || format!("{} записей", ctx.cfg.get().lab.lorebooks.len())}</span></div>
-                            <p class="hint">"Добавляй факты о мире, героях и событиях. Запись попадёт в контекст, когда ключевое слово встретится в твоём последнем сообщении."</p>
-                            <label class="fl" for="lab-lore-name">"Название"</label>
-                            <input class="fi" id="lab-lore-name" maxlength="60" placeholder="Например, Мир Астэр" prop:value=move || lore_name.get() on:input=move |e| lore_name.set(event_target_value(&e))/>
-                            <label class="fl" for="lab-lore-keys">"Ключевые слова через запятую"</label>
-                            <input class="fi" id="lab-lore-keys" maxlength="500" placeholder="Астэр, северное королевство, магия" prop:value=move || lore_keywords.get() on:input=move |e| lore_keywords.set(event_target_value(&e))/>
-                            <label class="fl" for="lab-lore-content">"Содержание"</label>
-                            <textarea class="fi" id="lab-lore-content" maxlength="4000" placeholder="Опиши факты, которые Luna должна учитывать…" prop:value=move || lore_content.get() on:input=move |e| lore_content.set(event_target_value(&e))></textarea>
-                            <button class="cta lab-action" type="button" on:click=add_lorebook>"Добавить в лорбук"</button>
-                            <div class="lab-list">
-                                {move || ctx.cfg.get().lab.lorebooks.iter().map(|entry| {
-                                    let item = entry.clone();
-                                    let toggle_id = entry.id.clone();
-                                    let delete_id = entry.id.clone();
-                                    view! {
-                                        <div class="lab-item lab-lore-item">
-                                            <button class="lab-state" type="button" class:on=item.enabled aria-label="Включить или выключить запись" on:click=move |_| ctx.cfg.update(|cfg| {
-                                                if let Some(found) = cfg.lab.lorebooks.iter_mut().find(|v| v.id == toggle_id) { found.enabled = !found.enabled; }
-                                            })><span></span></button>
-                                            <div class="lab-item-copy"><b>{item.name.clone()}</b><span>{item.keywords.join(" · ")}</span><small>{item.content.chars().take(110).collect::<String>()}</small></div>
-                                            <button class="lab-remove" type="button" aria-label="Удалить запись" on:click=move |_| ctx.cfg.update(|cfg| cfg.lab.lorebooks.retain(|v| v.id != delete_id))>"×"</button>
-                                        </div>
-                                    }
-                                }).collect_view()}
-                            </div>
-                        </div>
-                    }.into_view(),
-                    "presets" => view! {
-                        <div class="lab-panel" id="lab-panel" role="tabpanel" aria-live="polite">
-                            <div class="lab-heading"><b>"Пресеты ответа"</b><span>{move || format!("{} сохранено", ctx.cfg.get().lab.presets.len())}</span></div>
-                            <p class="hint">"Пресет задаёт длину и дополнительные правила ответа. Он применяется поверх выбранной персоны."</p>
-                            <label class="fl" for="lab-preset-name">"Название пресета"</label>
-                            <input class="fi" id="lab-preset-name" maxlength="60" placeholder="Например, Короткие ответы" prop:value=move || preset_name.get() on:input=move |e| preset_name.set(event_target_value(&e))/>
-                            <div class="fl">"Длина ответа"</div>
-                            <div class="seg">
-                                <button class:on=move || preset_len.get() == "short" on:click=move |_| preset_len.set("short".into())>"Кратко"</button>
-                                <button class:on=move || preset_len.get() == "normal" on:click=move |_| preset_len.set("normal".into())>"Обычно"</button>
-                                <button class:on=move || preset_len.get() == "long" on:click=move |_| preset_len.set("long".into())>"Подробно"</button>
-                            </div>
-                            <label class="fl" for="lab-preset-instructions">"Дополнительные правила"</label>
-                            <textarea class="fi" id="lab-preset-instructions" maxlength="1200" placeholder="Например: сначала вывод, затем короткое объяснение." prop:value=move || preset_instructions.get() on:input=move |e| preset_instructions.set(event_target_value(&e))></textarea>
-                            <div class="lab-preset-actions">
-                                <button class="cta lab-action lab-preset-save" type="button" on:click=add_preset>"Сохранить пресет"</button>
-                                <div class="lab-preset-active">
-                                    <span class="lab-preset-active-label">{move || if ctx.cfg.get().lab.active_preset.is_some() { "Пресет сейчас активен" } else { "Нет активного пресета" }}</span>
-                                    <button class="lab-preset-disable" type="button" disabled=move || ctx.cfg.get().lab.active_preset.is_none() on:click=move |_| ctx.cfg.update(|cfg| {
-                                        cfg.lab.active_preset = None;
-                                        cfg.len = "normal".into();
-                                    })>"Отключить"</button>
-                                </div>
-                            </div>
-                            <div class="lab-list">
-                                {move || ctx.cfg.get().lab.presets.iter().map(|preset| {
-                                    let item = preset.clone();
-                                    let apply = preset.clone();
-                                    let active_id = preset.id.clone();
-                                    let active_label_id = preset.id.clone();
-                                    let active_aria_id = preset.id.clone();
-                                    let delete_id = preset.id.clone();
-                                    view! {
-                                        <div class="lab-item">
-                                            <div class="lab-item-copy"><b>{item.name.clone()}</b><span>{match item.len.as_str() { "short" => "Кратко", "long" => "Подробно", _ => "Обычно" }}</span></div>
-                                            <button class="lab-mini" type="button" class:on=move || ctx.cfg.get().lab.active_preset.as_deref() == Some(active_id.as_str()) aria-pressed=move || ctx.cfg.get().lab.active_preset.as_deref() == Some(active_aria_id.as_str()) on:click=move |_| ctx.cfg.update(|cfg| {
-                                                cfg.len = apply.len.clone(); cfg.lab.active_preset = Some(apply.id.clone());
-                                            })>{move || if ctx.cfg.get().lab.active_preset.as_deref() == Some(active_label_id.as_str()) { "Применён" } else { "Применить" }}</button>
-                                            <button class="lab-remove" type="button" aria-label="Удалить пресет" on:click=move |_| ctx.cfg.update(|cfg| {
-                                                cfg.lab.presets.retain(|p| p.id != delete_id);
-                                                if cfg.lab.active_preset.as_deref() == Some(delete_id.as_str()) { cfg.lab.active_preset = None; cfg.len = "normal".into(); }
-                                            })>"×"</button>
-                                        </div>
-                                    }
-                                }).collect_view()}
-                            </div>
-                        </div>
-                    }.into_view(),
-                    "vectors" => view! {
-                        <div class="lab-panel" id="lab-panel" role="tabpanel" aria-live="polite">
-                            <div class="lab-heading"><b>"Векторная память"</b><span class="lab-status">"Английский · активен"</span></div>
-                            <p class="hint">"Для английских записей Luna строит embeddings и ищет совпадения по смыслу. Для русского текста пока используются ключевые слова и правила активации лорбуков."</p>
-                            <div class="lab-info-row"><span>"Embeddings-модель"</span><b>"Supabase gte-small · 384 · EN"</b></div>
-                            <div class="lab-info-row"><span>"Векторное хранилище"</span><b>"Postgres pgvector · HNSW"</b></div>
-                            <div class="lab-info-row"><span>"Поиск"</span><b>"Смысловой EN · ключевой RU"</b></div>
-                            <p class="hint">"Важно: gte-small обучена только для английского. Я не применяю её к русским текстам, чтобы не выдавать слабые совпадения за семантический поиск. Для полноценного RU/EN-поиска потребуется отдельная мультиязычная модель. Записи и векторы изолированы по аккаунтам."</p>
-                        </div>
-                    }.into_view(),
-                    _ => view! {
-                        <div class="lab-panel" id="lab-panel" role="tabpanel" aria-live="polite">
-                            <div class="lab-heading"><b>"Плагины"</b><span class="lab-status">"Не подключены"</span></div>
-                            <p class="hint">"Плагинов с реальным серверным исполнением пока нет. Здесь появится каталог интеграций с описанием разрешений, подтверждением действий и журналом вызовов."</p>
-                            <div class="lab-info-row"><span>"Реестр инструментов"</span><b>"Не настроен"</b></div>
-                            <div class="lab-info-row"><span>"Разрешения пользователя"</span><b>"Не настроены"</b></div>
-                            <div class="lab-info-row"><span>"Подтверждение действий"</span><b>"Не реализовано"</b></div>
-                            <p class="hint">"Никакие внешние действия не будут выполняться без явного разрешения и серверной проверки."</p>
-                        </div>
-                    }.into_view(),
-                }}
             </div>
         </section>
     }
