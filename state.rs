@@ -254,7 +254,7 @@ impl Ctx {
         let r = root.clone();
         create_effect(move |_| {
             let c = self.cfg.get();
-            if c.theme == "auto" {
+            if c.theme == "auto" || c.theme == "black" {
                 self.cfg.update(|cfg| cfg.theme = "dark".into());
                 return;
             }
@@ -286,6 +286,19 @@ impl Ctx {
             let _ = st.set_property("--a", &p.a);
             let _ = st.set_property("--b", &p.b);
             let _ = st.set_property("--c", &p.c);
+            if p.n == "Абсолютно чёрная" {
+                let _ = st.set_property("--bg", "#000");
+                let _ = st.set_property("--glass", "rgba(255,255,255,.045)");
+                let _ = st.set_property("--glass2", "rgba(255,255,255,.085)");
+                let _ = st.set_property("--edge", "rgba(255,255,255,.16)");
+                let _ = st.set_property("--shadow", "rgba(0,0,0,.9)");
+            } else {
+                let _ = st.remove_property("--bg");
+                let _ = st.remove_property("--glass");
+                let _ = st.remove_property("--glass2");
+                let _ = st.remove_property("--edge");
+                let _ = st.remove_property("--shadow");
+            }
         });
 
         // сохранение настроек с задержкой (не на каждую букву)
