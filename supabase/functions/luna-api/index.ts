@@ -30,6 +30,12 @@ const MEMORY_CATEGORIES = new Set(["character", "relationship", "world", "event"
 function memoryText(value: unknown, max = 1800) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
+function isEnglishDominant(value: string) {
+  const latin = (value.match(/[A-Za-z]/g) ?? []).length;
+  const cyrillic = (value.match(/[А-Яа-яЁё]/g) ?? []).length;
+  const total = latin + cyrillic;
+  return latin >= 6 && total > 0 && latin / total >= 0.7;
+}
 
 let gteSmallSession: any = null;
 async function generateKnowledgeEmbedding(value: string): Promise<number[]> {
@@ -86,8 +92,16 @@ async function syncLorebookEmbeddings(admin: any, userId: string, lab: any) {
     const title = memoryText(entry?.name, 60);
     const content = memoryText(entry?.content, 4000);
     if (!id || !title || !content || entry?.enabled !== true) continue;
-    activeIds.add(id);
     const previous = (existing ?? []).find((row: any) => row.source_id === id);
+    if (!isEnglishDominant(title + " " + content)) {
+      if (previous) {
+        const { error: deleteError } = await admin.from("luna_knowledge_embeddings").delete()
+          .eq("user_id", userId).eq("source_kind", "lorebook").eq("source_id", id);
+        if (deleteError) console.error("luna non-English lorebook cleanup failed", deleteError.message);
+      }
+      continue;
+    }
+    activeIds.add(id);
     if (!previous || previous.title !== title || previous.content !== content) {
       await upsertKnowledgeEmbedding(admin, userId, "lorebook", id, title, content);
     }
@@ -116,6 +130,14 @@ async function ensureMemoryEmbeddings(admin: any, userId: string, memories: any[
     const title = String(row.category ?? "Память");
     const content = memoryText(row.content, 4000);
     const previous = (existing ?? []).find((item: any) => item.source_id === id);
+    if (!isEnglishDominant(title + " " + content)) {
+      if (previous) {
+        const { error: deleteError } = await admin.from("luna_knowledge_embeddings").delete()
+          .eq("user_id", userId).eq("source_kind", "memory").eq("source_id", id);
+        if (deleteError) console.error("luna non-English memory cleanup failed", deleteError.message);
+      }
+      continue;
+    }
     if (!previous || previous.title !== title || previous.content !== content) {
       await upsertKnowledgeEmbedding(admin, userId, "memory", id, title, content);
     }
@@ -759,7 +781,14 @@ Deno.serve(async (req: Request) => {
       let semanticContext = "";
       const semanticQuery = messages.filter((message: any) => message.role === "user")
         .slice(-3).map((message: any) => String(message.content)).join("\n").slice(0, 1800);
-      if (semanticQuery) {
+      const queryTerms = semanticQuery.toLowerCase().match(/[a-zа-яё0-9]{3,}/gi) ?? [];
+      const lexicalMatches = (memoryRows ?? []).filter((row: any) =>
+        queryTerms.some((term: string) => String(row.content).toLowerCase().includes(term))
+      ).slice(0, 6);
+      const lexicalContext = lexicalMatches.map((row: any) =>
+        `[${row.category}; keyword match] ${row.content}`
+      ).join("\n").slice(0, 3000);
+      if (semanticQuery && isEnglishDominant(semanticQuery)) {
         try {
           const queryVector = await generateKnowledgeEmbedding(semanticQuery);
           const { data: matches, error: searchError } = await userClient.rpc("match_luna_knowledge", {
@@ -836,7 +865,8 @@ Deno.serve(async (req: Request) => {
         "Personalize communication using the user\u2019s stable preferences below. Apply them subtly without announcing or describing the profile. Always mirror the language of the user\u2019s current message unless they explicitly request another language; learned language preferences should not override a clear language switch. If no reliable preference exists for another dimension, follow the tone and level of detail requested in the current message. Treat one-off requests as local to that reply; explicit newer corrections override older preferences. Never let learned preferences override safety, accuracy, or the user\u2019s current explicit request.",
         communicationStyleContext ? `Stable user communication preferences (learned from explicit or repeated signals):\n${communicationStyleContext}` : "",
         memoryContext ? `Relevant long-term memories:\n${memoryContext}` : "",
-        semanticContext ? `Semantically retrieved knowledge (ranked by meaning similarity):\n${semanticContext}` : "",
+        lexicalContext ? `Keyword-matched memories (language-independent fallback):\n${lexicalContext}` : "",
+        semanticContext ? `English semantic retrieval (ranked by meaning similarity):\n${semanticContext}` : "",
         storyContext ? `Current roleplay continuity:\n${storyContext}` : "",
       ].join("\n");
       const all = [{ role: "system", content: system }, ...messages];
