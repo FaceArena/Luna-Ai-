@@ -981,7 +981,9 @@ fn Composer() -> impl IntoView {
             request_animation_frame(move || {
                 if let Some(t) = ta.get_untracked() {
                     let t: &web_sys::HtmlElement = t.unchecked_ref();
-                    let _ = t.focus();
+                    let options = web_sys::FocusOptions::new();
+                    options.set_prevent_scroll(true);
+                    let _ = t.focus_with_options(&options);
                 }
             });
         }
