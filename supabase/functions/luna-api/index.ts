@@ -42,10 +42,11 @@ function memoryText(value: unknown, max = 1800) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 function isEnglishDominant(value: string) {
-  const latin = (value.match(/[A-Za-z]/g) ?? []).length;
-  const cyrillic = (value.match(/[А-Яа-яЁё]/g) ?? []).length;
-  const total = latin + cyrillic;
-  return latin >= 6 && total > 0 && latin / total >= 0.7;
+  const letters = value.match(/\p{L}/gu) ?? [];
+  const latin = value.match(/\p{Script=Latin}/gu) ?? [];
+  const englishMarkers = value.match(/\b(?:the|and|or|but|of|to|in|for|with|on|at|is|are|was|were|be|this|that|you|your|we|they|he|she|it|what|how|when|where|from|about)\b/gi) ?? [];
+  return latin.length >= 8 && letters.length > 0 &&
+    latin.length / letters.length >= 0.95 && englishMarkers.length > 0;
 }
 
 let gteSmallSession: any = null;
@@ -72,6 +73,12 @@ async function upsertKnowledgeEmbedding(
 ) {
   const safeContent = memoryText(content, 4000);
   if (!sourceId || !safeContent) return;
+  if (!isEnglishDominant(title + " " + safeContent)) {
+    const { error } = await admin.from("luna_knowledge_embeddings").delete()
+      .eq("user_id", userId).eq("source_kind", sourceKind).eq("source_id", sourceId);
+    if (error) console.error("luna non-English embedding cleanup failed", error.message);
+    return;
+  }
   try {
     const embedding = await generateKnowledgeEmbedding([title, safeContent].filter(Boolean).join("\n"));
     const { error } = await admin.from("luna_knowledge_embeddings").upsert({
@@ -792,7 +799,9 @@ Deno.serve(async (req: Request) => {
       let semanticContext = "";
       const semanticQuery = messages.filter((message: any) => message.role === "user")
         .slice(-3).map((message: any) => String(message.content)).join("\n").slice(0, 1800);
-      const queryTerms = semanticQuery.toLowerCase().match(/[a-zа-яё0-9]{3,}/gi) ?? [];
+      const keywordStopWords = new Set(["как", "что", "это", "для", "при", "или", "она", "они", "его", "её", "the", "and", "for", "with", "this", "that", "are", "was", "were", "from", "about", "what", "how", "when", "where"]);
+      const queryTerms = (semanticQuery.toLowerCase().match(/[a-zа-яё0-9]{3,}/gi) ?? [])
+        .filter((term: string) => !keywordStopWords.has(term)).slice(0, 16);
       const lexicalMatches = (memoryRows ?? []).filter((row: any) =>
         queryTerms.some((term: string) => String(row.content).toLowerCase().includes(term))
       ).slice(0, 6);
@@ -826,7 +835,7 @@ Deno.serve(async (req: Request) => {
         Array.isArray(storyState.open_threads) && storyState.open_threads.length ? `Незавершённые линии: ${storyState.open_threads.join("; ")}` : ""
       ].filter(Boolean).join("\n") : "";
 
-      const words = promptWordCount(body.who) + promptWordCount(body.rules);
+      const words = promptWordCount(body.who) + promptWordCount(body.rules) + promptWordCount(body.preset_context);
       const effectiveUser = { ...user, app_metadata: { ...(user.app_metadata ?? {}), subscription_tier: subscription.tier } };
       const limit = promptLimit(effectiveUser);
       if (words > limit) return json(402, { error: "Лимит слов в персональных инструкциях превышен.", words, limit });
