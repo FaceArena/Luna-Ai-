@@ -748,7 +748,6 @@ fn PageLab() -> impl IntoView {
     let add_persona = move |_| {
         let label = persona_name.get_untracked().trim().to_string();
         if label.is_empty() {
-            ctx.say("Укажите название персоны.");
             return;
         }
         let current = ctx.cfg.get_untracked();
@@ -757,13 +756,11 @@ fn PageLab() -> impl IntoView {
             id, name: label, who: current.who.clone(), rules: current.rules.clone(),
         }));
         persona_name.set(String::new());
-        ctx.say("Персона сохранена.");
     };
 
     let add_preset = move |_| {
         let label = preset_name.get_untracked().trim().to_string();
         if label.is_empty() {
-            ctx.say("Укажите название пресета.");
             return;
         }
         let id = format!("preset-{}", js_sys::Date::now() as u64);
@@ -772,7 +769,6 @@ fn PageLab() -> impl IntoView {
         ctx.cfg.update(|cfg| cfg.lab.presets.push(LabPreset { id, name: label, len, instructions }));
         preset_name.set(String::new());
         preset_instructions.set(String::new());
-        ctx.say("Пресет сохранён.");
     };
 
     let add_lorebook = move |_| {
@@ -781,7 +777,6 @@ fn PageLab() -> impl IntoView {
         let keywords = lore_keywords.get_untracked().split(',').map(|v| v.trim().to_string())
             .filter(|v| !v.is_empty()).take(20).collect::<Vec<_>>();
         if label.is_empty() || content.is_empty() || keywords.is_empty() {
-            ctx.say("Заполните название, ключевые слова и содержание лорбука.");
             return;
         }
         let id = format!("lore-{}", js_sys::Date::now() as u64);
@@ -791,7 +786,6 @@ fn PageLab() -> impl IntoView {
         lore_name.set(String::new());
         lore_keywords.set(String::new());
         lore_content.set(String::new());
-        ctx.say("Запись лорбука сохранена.");
     };
 
     view! {
@@ -1049,7 +1043,6 @@ fn PageMemory() -> impl IntoView {
                                                         spawn_local(async move {
                                                             if api::delete_memory(&id).await {
                                                                 items.update(|all| all.retain(|row| row.id != id));
-                                                                ctx.say("Запись удалена.");
                                                             } else { ctx.say("Не удалось удалить запись."); }
                                                             busy.set(false);
                                                         });
