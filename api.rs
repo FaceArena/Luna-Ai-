@@ -65,8 +65,17 @@ pub async fn del_all() {
     let _ = Request::delete("/api/chats").send().await;
 }
 
-pub async fn set_plan(plan: usize) {
-    if let Ok(rq) = Request::put("/api/plan").json(&serde_json::json!({ "plan": plan })) {
-        let _ = rq.send().await;
+pub async fn set_plan(plan: usize) -> Result<(), String> {
+    let request = Request::put("/api/plan")
+        .json(&serde_json::json!({ "plan": plan }))
+        .map_err(|_| "Не удалось подготовить запрос.".to_string())?;
+    let response = request.send().await
+        .map_err(|_| "Не удалось связаться с сервером.".to_string())?;
+    if response.ok() {
+        Ok(())
+    } else {
+        let status = response.status();
+        let detail = response.text().await.unwrap_or_default();
+        Err(format!("HTTP {status}: {detail}"))
     }
 }
