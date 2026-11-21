@@ -3,7 +3,7 @@ mod providers;
 
 use axum::{routing::{delete, get, post, put}, Json, Router};
 use serde_json::{json, Value};
-use std::{net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::{Arc, Mutex}, time::Instant};
 use tower_http::trace::TraceLayer;
 
 #[derive(Clone)]
@@ -11,6 +11,7 @@ pub struct AppState {
     pub http: reqwest::Client,
     pub supabase_url: Arc<str>,
     pub supabase_anon_key: Arc<str>,
+    pub chat_requests: Arc<Mutex<HashMap<String, Vec<Instant>>>>,
 }
 
 async fn health() -> Json<Value> {
@@ -47,6 +48,7 @@ async fn main() {
         http,
         supabase_url: Arc::from(supabase_url),
         supabase_anon_key: Arc::from(supabase_anon_key),
+        chat_requests: Arc::new(Mutex::new(HashMap::new())),
     };
 
     let app = Router::new()
