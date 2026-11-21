@@ -1,6 +1,6 @@
 -- Luna AI provider preferences and Vault references.
--- Apply only to the confirmed Luna Supabase project after reviewing the project ref.
--- Secret values are stored in Supabase Vault; this table stores references only.
+-- Apply only to the confirmed Luna Supabase project.
+-- This table stores a Vault UUID, never the plaintext provider key.
 
 create table if not exists public.luna_provider_settings (
     user_id uuid primary key references auth.users(id) on delete cascade,
@@ -13,6 +13,8 @@ create table if not exists public.luna_provider_settings (
 
 alter table public.luna_provider_settings enable row level security;
 
+-- Browser users may inspect their selected provider/model only.
+-- They cannot read secret values or change the Vault reference directly.
 drop policy if exists "Users can read their Luna provider preference"
     on public.luna_provider_settings;
 create policy "Users can read their Luna provider preference"
@@ -20,21 +22,11 @@ create policy "Users can read their Luna provider preference"
     for select to authenticated
     using (auth.uid() = user_id);
 
-drop policy if exists "Users can create their Luna provider preference"
-    on public.luna_provider_settings;
-create policy "Users can create their Luna provider preference"
-    on public.luna_provider_settings
-    for insert to authenticated
-    with check (auth.uid() = user_id);
+revoke all on public.luna_provider_settings from anon;
+revoke insert, update, delete on public.luna_provider_settings from authenticated;
+grant select on public.luna_provider_settings to authenticated;
+grant all on public.luna_provider_settings to service_role;
 
-drop policy if exists "Users can update their Luna provider preference"
-    on public.luna_provider_settings;
-create policy "Users can update their Luna provider preference"
-    on public.luna_provider_settings
-    for update to authenticated
-    using (auth.uid() = user_id)
-    with check (auth.uid() = user_id);
-
--- No browser role receives access to vault.decrypted_secrets.
--- The trusted server uses its server-only Supabase credential to resolve
--- vault_secret_id and read the secret at request time. Never return that value.
+-- Server-side code must use the service role only for the narrowly scoped
+-- provider-secret RPCs introduced in a later migration. Never grant browser
+-- roles access to vault.decrypted_secrets.
