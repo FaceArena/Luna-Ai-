@@ -44,9 +44,32 @@ function memoryText(value: unknown, max = 1800) {
 function isEnglishDominant(value: string) {
   const letters = value.match(/\p{L}/gu) ?? [];
   const latin = value.match(/\p{Script=Latin}/gu) ?? [];
-  const englishMarkers = value.match(/\b(?:the|and|or|but|of|to|in|for|with|on|at|is|are|was|were|be|this|that|you|your|we|they|he|she|it|what|how|when|where|from|about)\b/gi) ?? [];
   return latin.length >= 8 && letters.length > 0 &&
-    latin.length / letters.length >= 0.95 && englishMarkers.length > 0;
+    latin.length / letters.length >= 0.95;
+}
+function splitKnowledgeText(value: string, chunkSize = 1400, overlap = 120) {
+  const text = value.trim();
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < text.length && chunks.length < 4) {
+    let end = Math.min(start + chunkSize, text.length);
+    if (end < text.length) {
+      const boundaries = [
+        text.lastIndexOf("\n", end),
+        text.lastIndexOf(". ", end),
+        text.lastIndexOf("? ", end),
+        text.lastIndexOf("! ", end),
+        text.lastIndexOf(" ", end),
+      ];
+      const boundary = Math.max(...boundaries);
+      if (boundary > start + Math.floor(chunkSize * 0.65)) end = boundary;
+    }
+    const chunk = text.slice(start, end).trim();
+    if (chunk) chunks.push(chunk);
+    if (end >= text.length) break;
+    start = Math.max(end - overlap, start + 1);
+  }
+  return chunks;
 }
 
 let gteSmallSession: any = null;
@@ -104,28 +127,26 @@ async function syncLorebookEmbeddings(admin: any, userId: string, lab: any) {
     console.error("luna lorebook embedding sync read failed", error.message);
     return;
   }
-  const activeIds = new Set<string>();
+  const desiredSourceIds = new Set<string>();
   for (const entry of entries) {
     const id = String(entry?.id ?? "").slice(0, 80);
     const title = memoryText(entry?.name, 60);
     const content = memoryText(entry?.content, 4000);
-    if (!id || !title || !content || entry?.enabled !== true) continue;
-    const previous = (existing ?? []).find((row: any) => row.source_id === id);
-    if (!isEnglishDominant(title + " " + content)) {
-      if (previous) {
-        const { error: deleteError } = await admin.from("luna_knowledge_embeddings").delete()
-          .eq("user_id", userId).eq("source_kind", "lorebook").eq("source_id", id);
-        if (deleteError) console.error("luna non-English lorebook cleanup failed", deleteError.message);
+    if (!id || !title || !content || entry?.enabled !== true || !isEnglishDominant(title + " " + content)) continue;
+    const chunks = splitKnowledgeText(content);
+    for (let index = 0; index < chunks.length; index++) {
+      const sourceId = `${id}:${index}`;
+      const chunkTitle = chunks.length > 1 ? `${title} (${index + 1}/${chunks.length})` : title;
+      const chunk = chunks[index];
+      desiredSourceIds.add(sourceId);
+      const previous = (existing ?? []).find((row: any) => row.source_id === sourceId);
+      if (!previous || previous.title !== chunkTitle || previous.content !== chunk) {
+        await upsertKnowledgeEmbedding(admin, userId, "lorebook", sourceId, chunkTitle, chunk);
       }
-      continue;
-    }
-    activeIds.add(id);
-    if (!previous || previous.title !== title || previous.content !== content) {
-      await upsertKnowledgeEmbedding(admin, userId, "lorebook", id, title, content);
     }
   }
   for (const row of existing ?? []) {
-    if (!activeIds.has(String(row.source_id))) {
+    if (!desiredSourceIds.has(String(row.source_id))) {
       const { error: deleteError } = await admin.from("luna_knowledge_embeddings").delete()
         .eq("user_id", userId).eq("source_kind", "lorebook").eq("source_id", row.source_id);
       if (deleteError) console.error("luna lorebook embedding cleanup failed", deleteError.message);
@@ -822,7 +843,7 @@ Deno.serve(async (req: Request) => {
           const { data: matches, error: searchError } = await userClient.rpc("match_luna_knowledge", {
             query_embedding: queryVector,
             match_count: 8,
-            min_similarity: 0.42,
+            min_similarity: 0.5,
             source_filter: null,
           });
           if (searchError) {
