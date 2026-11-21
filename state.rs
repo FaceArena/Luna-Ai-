@@ -561,6 +561,8 @@ impl Ctx {
                 429 => return self.fail(pick(&data().tpl_limit), 2),
                 401 => {
                     self.me.set(None);
+                    self.mi.set(0);
+                    ls_set("luna-model2", "0");
                     self.fail("Сессия закончилась. Войдите в аккаунт ещё раз.".into(), 0);
                     self.open_sheet(Page::Acc);
                     return;
