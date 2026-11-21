@@ -113,6 +113,72 @@ const promptLimit = (user: any) => {
   return 100;
 };
 
+type SubscriptionTier = "free" | "luna" | "luna_pro";
+const membershipCache = new Map<string, { member: boolean; checkedAt: number }>();
+
+async function isLunaChannelMember(user: any): Promise<boolean> {
+  const telegramId = String(user?.user_metadata?.sub ?? "");
+  const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  if (!botToken || !new RegExp("^\\d{5,20}$").test(telegramId)) return false;
+  const cached = membershipCache.get(telegramId);
+  if (cached && Date.now() - cached.checkedAt < (cached.member ? 60_000 : 15_000)) return cached.member;
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/getChatMember`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: "@LunaAiroll", user_id: Number(telegramId) }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return false;
+    const payload = await response.json();
+    const member = payload?.ok === true && (
+      ["creator", "administrator", "member"].includes(payload?.result?.status) ||
+      (payload?.result?.status === "restricted" && payload?.result?.is_member === true)
+    );
+    membershipCache.set(telegramId, { member, checkedAt: Date.now() });
+    return member;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveSubscription(admin: any, user: any, requestedPlan?: number) {
+  const rawPlan = Number(requestedPlan ?? user?.user_metadata?.plan ?? 0);
+  const selectedPlan = Number.isInteger(rawPlan) && rawPlan >= 0 && rawPlan <= 2 ? rawPlan : 0;
+  const member = selectedPlan > 0 ? await isLunaChannelMember(user) : false;
+  const plan = member ? selectedPlan : 0;
+  const tier: SubscriptionTier = plan === 2 ? "luna_pro" : plan === 1 ? "luna" : "free";
+  const currentTier = String(user?.app_metadata?.subscription_tier ?? "free");
+  if (currentTier !== tier) {
+    const { error } = await admin.auth.admin.updateUserById(user.id, {
+      app_metadata: { ...(user.app_metadata ?? {}), subscription_tier: tier },
+    });
+    if (error) {
+      console.error("luna subscription sync failed", error.message);
+      return { plan: 0, tier: "free" as SubscriptionTier, member: false, error: true };
+    }
+  }
+  return { plan, tier, member, error: false };
+}
+
+function tierLimits(tier: SubscriptionTier) {
+  if (tier === "luna_pro") return {
+    requestsPerMinute: 12, maxMessages: 20, maxMessageChars: 16000,
+    memoryRows: 100, memoryCount: 40, memoryChars: 9000,
+    maxCompletionTokens: 4096, reasoningEffort: "high" as const,
+  };
+  if (tier === "luna") return {
+    requestsPerMinute: 12, maxMessages: 20, maxMessageChars: 16000,
+    memoryRows: 75, memoryCount: 30, memoryChars: 6000,
+    maxCompletionTokens: 2400, reasoningEffort: "medium" as const,
+  };
+  return {
+    requestsPerMinute: 6, maxMessages: 12, maxMessageChars: 10000,
+    memoryRows: 30, memoryCount: 15, memoryChars: 3000,
+    maxCompletionTokens: 1400, reasoningEffort: "low" as const,
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const base = Deno.env.get("SUPABASE_URL")!;
@@ -129,7 +195,33 @@ Deno.serve(async (req: Request) => {
   const method = req.method;
   const admin = createClient(base, service, { auth: { persistSession: false, autoRefreshToken: false } });
 
-  if (method === "GET" && path === "/health") return json(200, { service: "luna-api", status: "ok" });
+  if (method === "GET" && path === "/health") {
+    const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    let telegramBotValid = false;
+    let channelAdmin = false;
+    if (botToken) {
+      try {
+        const meResponse = await fetch(`https://api.telegram.org/bot${botToken}/getMe`, { signal: AbortSignal.timeout(5000) });
+        const me = await meResponse.json();
+        telegramBotValid = meResponse.ok && me?.ok === true && Number.isSafeInteger(me?.result?.id);
+        if (telegramBotValid) {
+          const memberResponse = await fetch(`https://api.telegram.org/bot${botToken}/getChatMember`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: "@LunaAiroll", user_id: me.result.id }),
+            signal: AbortSignal.timeout(5000),
+          });
+          const member = await memberResponse.json();
+          channelAdmin = memberResponse.ok && member?.ok === true &&
+            ["creator", "administrator"].includes(member?.result?.status);
+        }
+      } catch {
+        telegramBotValid = false;
+        channelAdmin = false;
+      }
+    }
+    return json(200, { service: "luna-api", status: "ok", telegramBotConfigured: Boolean(botToken), telegramBotValid, channelAdmin });
+  }
 
   let token = cookieToken(req);
   const authorization = req.headers.get("Authorization") ?? "";
@@ -166,13 +258,12 @@ Deno.serve(async (req: Request) => {
         metadata.name ?? metadata.full_name ?? metadata.preferred_username ??
         metadata.username ?? metadata.given_name ?? "Пользователь Telegram"
       ).trim().slice(0, 40) || "Пользователь Telegram";
-      const plan = Math.min(2, Number(metadata.plan ?? 0) || 0);
+      const subscription = await resolveSubscription(admin, tokenData.user);
+      if (subscription.error) return text(503, "Не удалось проверить доступ к тарифу. Попробуйте позже.");
+      const effectiveUser = { ...tokenData.user, app_metadata: { ...(tokenData.user.app_metadata ?? {}), subscription_tier: subscription.tier } };
       return json(200, {
-        id: tokenData.user.id,
-        name,
-        email: tokenData.user.email ?? "",
-        plan,
-        prompt_limit: promptLimit(tokenData.user),
+        id: tokenData.user.id, name, email: tokenData.user.email ?? "",
+        plan: subscription.plan, prompt_limit: promptLimit(effectiveUser),
       }, { "Set-Cookie": sessionCookie(tokenData.access_token) });
     }
 
@@ -192,12 +283,15 @@ Deno.serve(async (req: Request) => {
     const user = authData.user;
 
     if (method === "GET" && path === "/api/me") {
+      const subscription = await resolveSubscription(admin, user);
+      if (subscription.error) return text(503, "Не удалось проверить доступ к тарифу. Попробуйте позже.");
+      const effectiveUser = { ...user, app_metadata: { ...(user.app_metadata ?? {}), subscription_tier: subscription.tier } };
       return json(200, {
         id: user.id,
         name: String(user.user_metadata?.name ?? user.user_metadata?.full_name ?? user.user_metadata?.preferred_username ?? user.user_metadata?.username ?? user.user_metadata?.given_name ?? "Пользователь Telegram").trim().slice(0, 40) || "Пользователь Telegram",
         email: user.email ?? "",
-        plan: Math.min(2, Number(user.user_metadata?.plan ?? 0) || 0),
-        prompt_limit: promptLimit(user),
+        plan: subscription.plan,
+        prompt_limit: promptLimit(effectiveUser),
       });
     }
 
@@ -302,24 +396,33 @@ Deno.serve(async (req: Request) => {
     }
 
     if (path === "/api/plan" && method === "PUT") {
-      const body = await req.json();
-      const plan = Math.max(0, Math.min(2, Number(body.plan) || 0));
-      const { error } = await userClient.auth.updateUser({ data: { plan } });
-      return error ? text(502, "Не удалось сохранить выбор тарифа.") : new Response(null, { status: 204, headers: cors });
+      const body = await req.json().catch(() => null);
+      const rawPlan = Number(body?.plan);
+      if (!Number.isInteger(rawPlan) || rawPlan < 0 || rawPlan > 2) return text(400, "Некорректный тариф.");
+      if (rawPlan > 0 && !(await isLunaChannelMember(user)))
+        return text(403, "Для доступа к премиум-моделям подпишитесь на Telegram-канал Luna AI.");
+      const { data, error } = await userClient.auth.updateUser({ data: { plan: rawPlan } });
+      if (error || !data.user) return text(502, "Не удалось сохранить выбор тарифа.");
+      const subscription = await resolveSubscription(admin, data.user, rawPlan);
+      if (subscription.error) return text(503, "Не удалось проверить доступ к тарифу. Попробуйте позже.");
+      return new Response(null, { status: 204, headers: cors });
     }
 
     if (path === "/api/provider-settings") return text(404, "Маршрут не найден.");
 
     if (path === "/api/chat" && method === "POST") {
+      const subscription = await resolveSubscription(admin, user);
+      if (subscription.error) return text(503, "Не удалось проверить доступ к тарифу. Попробуйте позже.");
+      const limits = tierLimits(subscription.tier);
       const now = Date.now();
       const recent = (chatRateLimits.get(user.id) ?? []).filter((at) => now - at < 60_000);
-      if (recent.length >= 12) return text(429, "Слишком много сообщений. Подождите минуту.");
+      if (recent.length >= limits.requestsPerMinute) return text(429, "Слишком много сообщений. Подождите минуту.");
       recent.push(now);
       chatRateLimits.set(user.id, recent);
       const body = await req.json();
       const messages = Array.isArray(body.msgs) ? body.msgs : [];
-      if (!messages.length || messages.length > 20 || messages.some((m: any) =>
-        !["user", "assistant"].includes(m.role) || typeof m.content !== "string" || m.content.length > 16000))
+      if (!messages.length || messages.length > limits.maxMessages || messages.some((m: any) =>
+        !["user", "assistant"].includes(m.role) || typeof m.content !== "string" || m.content.length > limits.maxMessageChars))
         return text(400, "Слишком длинный запрос или некорректная история.");
 
       const chatId = Number(body.chat_id);
@@ -338,7 +441,7 @@ Deno.serve(async (req: Request) => {
       const { data: memoryRows } = await userClient.from("luna_memories")
         .select("category,content,importance,confidence,source,chat_id")
         .eq("user_id", user.id).or(body.keep === false ? "chat_id.is.null" : `chat_id.is.null,chat_id.eq.${chatId}`)
-        .order("updated_at", { ascending: false }).limit(100);
+        .order("updated_at", { ascending: false }).limit(limits.memoryRows);
       const storyStateResult = keepChat
         ? await userClient.from("luna_chat_memory_state")
           .select("summary,last_scene,open_threads").eq("user_id", user.id).eq("chat_id", chatId).maybeSingle()
@@ -347,10 +450,10 @@ Deno.serve(async (req: Request) => {
       const prioritizedMemories = [...(memoryRows ?? [])].sort((a: any, b: any) =>
         Number(b.source === "correction") - Number(a.source === "correction") ||
         Number(b.importance) - Number(a.importance)
-      ).slice(0, 40);
+      ).slice(0, limits.memoryCount);
       const memoryContext = prioritizedMemories.map((m: any) =>
         `[${m.category}; ${m.source === "correction" ? "исправление пользователя" : "память"}; ${m.chat_id === null ? "общая память" : "этот чат"}] ${m.content}`
-      ).join("\n").slice(0, 9000);
+      ).join("\n").slice(0, limits.memoryChars);
       const storyContext = storyState ? [
         storyState.summary ? `Состояние истории: ${storyState.summary}` : "",
         storyState.last_scene ? `Последняя сцена: ${storyState.last_scene}` : "",
@@ -358,7 +461,8 @@ Deno.serve(async (req: Request) => {
       ].filter(Boolean).join("\n") : "";
 
       const words = promptWordCount(body.who) + promptWordCount(body.rules);
-      const limit = promptLimit(user);
+      const effectiveUser = { ...user, app_metadata: { ...(user.app_metadata ?? {}), subscription_tier: subscription.tier } };
+      const limit = promptLimit(effectiveUser);
       if (words > limit) return json(402, { error: "Лимит слов в персональных инструкциях превышен.", words, limit });
       const { data: apiKey, error: keyError } = await admin.rpc("luna_get_global_secret", {
         p_name: "luna_global_groq_api_key",
@@ -408,7 +512,12 @@ Deno.serve(async (req: Request) => {
       const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, messages: all, stream: false }),
+        body: JSON.stringify({
+          model, messages: all, stream: false,
+          reasoning_effort: limits.reasoningEffort,
+          reasoning_format: "hidden",
+          max_completion_tokens: limits.maxCompletionTokens,
+        }),
       });
       if (!upstream.ok) {
         if ([401, 403].includes(upstream.status)) return text(422, "Не удалось выполнить запрос. Попробуйте позже.");
