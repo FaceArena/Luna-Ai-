@@ -70,7 +70,7 @@ fn clear_session_cookie() -> HeaderValue {
 }
 
 fn error(status: StatusCode, message: &'static str) -> Response {
-    (status, Json(json!({"error": message}))).into_response()
+    (status, [(header::CONTENT_TYPE, "text/plain; charset=utf-8")], message).into_response()
 }
 
 async fn auth_user(state: &AppState, token: &str) -> Result<SupabaseUser, Response> {
@@ -118,9 +118,10 @@ pub async fn register(
         Err(_) => return error(StatusCode::BAD_GATEWAY, "Некорректный ответ сервиса аккаунтов."),
     };
     if !status.is_success() {
-        return (StatusCode::BAD_REQUEST, Json(json!({
-            "error": body.msg.or(body.message).unwrap_or_else(|| "Не удалось создать аккаунт.".into())
-        }))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            body.msg.or(body.message).unwrap_or_else(|| "Не удалось создать аккаунт.".into())
+        ).into_response();
     }
     let (Some(token), Some(user)) = (body.access_token, body.user) else {
         return error(StatusCode::CONFLICT, "Аккаунт создан. Подтвердите email, затем войдите.");
