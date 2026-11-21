@@ -457,7 +457,7 @@ fn PageMain() -> impl IntoView {
                 <h3>"ИИ"</h3>
                 <div class="grp">
                     {nav_row("ai", || "Персональный ИИ".into(), move || name(ctx), move || ctx.page.set(Page::Ai))}
-                    {nav_row("gear", || "Провайдеры и API-ключи".into(), || "Groq · Gemini".into(), move || ctx.page.set(Page::Providers))}
+                    {nav_row("bolt", || "Провайдеры и API-ключи".into(), || "Groq · Gemini".into(), move || ctx.page.set(Page::Providers))}
                 </div>
 
                 <h3>"Подписка"</h3>
