@@ -489,9 +489,17 @@ Deno.serve(async (req: Request) => {
         }
         return text(403, "Для доступа к премиум-моделям подпишитесь на Telegram-канал Luna AI.");
       }
-      const { data, error } = await userClient.auth.updateUser({ data: { plan: rawPlan } });
-      if (error || !data.user) return text(502, "Не удалось сохранить выбор тарифа.");
-      const subscription = await resolveSubscription(admin, data.user, rawPlan);
+      // This Edge Function client has no persisted Auth session, so auth.updateUser()
+      // cannot update the current user. Use the service-role Admin API after the
+      // authenticated user and Telegram channel membership have been verified.
+      const { data: updatedUserData, error: planSaveError } = await admin.auth.admin.updateUserById(user.id, {
+        user_metadata: { ...(user.user_metadata ?? {}), plan: rawPlan },
+      });
+      if (planSaveError || !updatedUserData.user) {
+        console.error("luna plan metadata update failed", planSaveError?.message ?? "user not returned");
+        return text(502, "Не удалось сохранить выбор тарифа.");
+      }
+      const subscription = await resolveSubscription(admin, updatedUserData.user, rawPlan);
       if (subscription.error) return text(503, "Не удалось проверить доступ к тарифу. Попробуйте позже.");
       return new Response(null, { status: 204, headers: cors });
     }
