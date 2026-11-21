@@ -1,6 +1,6 @@
 use crate::state::{Chat, Me};
 use gloo_net::http::Request;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub async fn me() -> Option<Me> {
     let r = Request::get("/api/me").send().await.ok()?;
