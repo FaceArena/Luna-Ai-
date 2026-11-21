@@ -164,7 +164,8 @@ impl Ctx {
     pub fn new() -> Self {
         let cfg: Cfg = ls_get("luna-cfg").and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
         let pal = ls_get("luna-pal3").and_then(|s| s.parse().ok()).unwrap_or(0usize).min(data().pal.len() - 1);
-        let mi = ls_get("luna-model2").and_then(|s| s.parse().ok()).unwrap_or(0usize).min(2);
+        // The active tariff is server-authoritative; never restore a premium plan from local storage.
+        let mi = 0usize;
         Self {
             cfg: create_rw_signal(cfg),
             cfg_sync: create_rw_signal(false),
@@ -387,6 +388,8 @@ impl Ctx {
     pub fn logout(self) {
         spawn_local(api::logout());
         self.cfg_sync.set(false);
+        self.mi.set(0);
+        ls_set("luna-model2", "0");
         self.me.set(None);
         self.cfg.set(Cfg::default());
         self.chats.set(vec![]);
