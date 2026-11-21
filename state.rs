@@ -623,9 +623,9 @@ impl Ctx {
                 !keyword.is_empty() && last_message.contains(&keyword)
             }))
             .take(5)
-            .map(|book| format!("[{}]\\n{}", book.name, book.content))
+            .map(|book| format!("[{}]\n{}", book.name, book.content))
             .collect::<Vec<_>>()
-            .join("\\n\\n")
+            .join("\n\n")
             .chars().take(8000).collect::<String>();
         let preset_context = cfg.lab.active_preset.as_ref()
             .and_then(|id| cfg.lab.presets.iter().find(|preset| &preset.id == id))
