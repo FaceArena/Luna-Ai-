@@ -414,6 +414,14 @@ body {
 #app .stream-text { opacity: 0; transition: opacity 180ms ease; }
 #app .stream-text.active { opacity: 1; }
 #log { position: relative; }
+#messages-content {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-height: 100%;
+}
 #log .jump {
   position: sticky;
   z-index: 4;
