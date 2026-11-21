@@ -100,10 +100,10 @@ Deno.serve(async (req: Request) => {
     if (body.action === "chat") {
       const { data: rows, error } = await admin.from("luna_provider_settings")
         .select("provider,model,vault_secret_id,updated_at").eq("user_id", userId)
-        .not("vault_secret_id", "is", null).order("updated_at", { ascending: false }).limit(1);
+        .order("updated_at", { ascending: false }).limit(1);
       if (error) throw error;
       const setting = rows?.[0];
-      if (!setting) return reply(503, { error: "No AI provider key configured" });
+      if (!setting || !setting.vault_secret_id) return reply(503, { error: "No API key configured for the selected provider" });
       const { data: apiKey, error: keyError } = await admin.rpc("luna_vault_get_secret", {
         p_user_id: userId, p_provider: setting.provider,
       });
