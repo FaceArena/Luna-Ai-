@@ -519,7 +519,6 @@ impl Ctx {
                     if let Some(piece) = event["choices"][0]["delta"]["content"].as_str() {
                         answer.push_str(piece);
                         self.stream.set(Some(clean(&answer)));
-                        self.scroll(false);
                     }
                 }
                 if finished { break; }
