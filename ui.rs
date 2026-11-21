@@ -858,13 +858,15 @@ fn Composer() -> impl IntoView {
         ctx.send(draft.get_untracked());
         if ctx.busy.get_untracked() {
             draft.set(String::new());
-            // Сразу снимаем фокус: iOS начинает закрывать клавиатуру в том же
-            // пользовательском событии, а footer следует за изменением viewport.
-            if let Some(t) = ta.get_untracked() {
-                let t: &web_sys::HtmlElement = t.unchecked_ref();
-                t.blur();
-            }
+            // pointerdown на кнопке отменён: textarea сохраняет фокус,
+            // поэтому iOS Safari не закрывает клавиатуру после отправки.
             request_animation_frame(fit);
+            request_animation_frame(move || {
+                if let Some(t) = ta.get_untracked() {
+                    let t: &web_sys::HtmlElement = t.unchecked_ref();
+                    let _ = t.focus();
+                }
+            });
         }
     };
 
@@ -879,16 +881,20 @@ fn Composer() -> impl IntoView {
                           }
                           on:focus=move |_| {
                               let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
-                              set_timeout(move || {
-                                  let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
-                              }, Duration::from_millis(100));
+                              for delay in [50, 150, 300] {
+                                  set_timeout(move || {
+                                      let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
+                                  }, Duration::from_millis(delay));
+                              }
                               request_animation_frame(move || ctx.scroll(false));
                           }
                           on:blur=move |_| {
                               let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
-                              set_timeout(move || {
-                                  let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
-                              }, Duration::from_millis(100));
+                              for delay in [50, 150, 300] {
+                                  set_timeout(move || {
+                                      let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
+                                  }, Duration::from_millis(delay));
+                              }
                           }></textarea>
                 <button class="glass send" id="send"
                         aria-label=move || if ctx.busy.get() { "Стоп" } else { "Отправить" }
