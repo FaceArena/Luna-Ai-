@@ -175,7 +175,7 @@ async function isLunaChannelMember(admin: any, user: any): Promise<boolean | nul
     ""
   ).trim();
   const telegramUserId = Number(telegramId);
-  if (!/^\\d{1,16}$/.test(telegramId) || !Number.isSafeInteger(telegramUserId) || telegramUserId <= 0) {
+  if (!/^\d{1,16}$/.test(telegramId) || !Number.isSafeInteger(telegramUserId) || telegramUserId <= 0) {
     membershipFailures.set(user.id, "missing_telegram_id");
     console.warn("luna membership unavailable: trusted Telegram Bot API id missing or malformed", {
       identityProviders: identities.map((identity: any) => identity?.provider).filter(Boolean),
