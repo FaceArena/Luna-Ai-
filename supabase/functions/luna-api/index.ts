@@ -588,10 +588,11 @@ Deno.serve(async (req: Request) => {
         lab: {
           personas: Array.isArray(labInput?.personas) ? labInput.personas.slice(0, 20).map((item: any) => ({
             id: String(item?.id ?? "").slice(0, 80),
-            name: String(item?.name ?? "").trim().slice(0, 60),
+            title: String(item?.title ?? "").trim().slice(0, 60),
+            name: String(item?.name ?? "Luna").trim().slice(0, 80),
             who: String(item?.who ?? "").slice(0, 3000),
             rules: String(item?.rules ?? "").slice(0, 3000),
-          })).filter((item: any) => item.id && item.name) : [],
+          })) .filter((item: any) => item.id && item.title) : [],
           presets: Array.isArray(labInput?.presets) ? labInput.presets.slice(0, 20).map((item: any) => ({
             id: String(item?.id ?? "").slice(0, 80),
             name: String(item?.name ?? "").trim().slice(0, 60),
