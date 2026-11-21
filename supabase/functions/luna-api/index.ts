@@ -812,7 +812,7 @@ Deno.serve(async (req: Request) => {
         try {
           const queryVector = await generateKnowledgeEmbedding(semanticQuery);
           const { data: matches, error: searchError } = await userClient.rpc("match_luna_knowledge", {
-            query_embedding: JSON.stringify(queryVector),
+            query_embedding: queryVector,
             match_count: 8,
             min_similarity: 0.42,
             source_filter: null,
