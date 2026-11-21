@@ -69,6 +69,19 @@ Deno.serve(async (req: Request) => {
     if (body.action === "set_key") {
       const key = typeof body.key === "string" ? body.key.trim() : "";
       if (key.length < 8 || key.length > 4096) return reply(400, { error: "Invalid API key" });
+      const model = String(body.model ?? "").trim();
+      const allowed = provider === "groq"
+        ? ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+        : ["gemini-2.5-flash", "gemini-2.5-pro"];
+      if (!allowed.includes(model)) return reply(400, { error: "Unsupported model" });
+      const { data: existing, error: readError } = await admin.from("luna_provider_settings")
+        .select("user_id").eq("user_id", userId).eq("provider", provider).maybeSingle();
+      if (readError) throw readError;
+      const write = existing
+        ? await admin.from("luna_provider_settings").update({ model, updated_at: new Date().toISOString() })
+            .eq("user_id", userId).eq("provider", provider)
+        : await admin.from("luna_provider_settings").insert({ user_id: userId, provider, model });
+      if (write.error) throw write.error;
       const { error } = await admin.rpc("luna_vault_set_secret", {
         p_user_id: userId, p_provider: provider, p_secret: key,
       });
