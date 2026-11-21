@@ -576,7 +576,7 @@ fn PageAi() -> impl IntoView {
                 <p class="hint">{move || format!("Инструкции: {} / {} слов", prompt_words(), prompt_limit())}</p>
                 {move || if prompt_over() {
                     view! {
-                        <div class="grp lim">
+                        <div class="grp lim prompt-limit-warning">
                             <p>"Вы превысили лимит бесплатной версии. Сократите инструкции или посмотрите платные тарифы с большим лимитом."</p>
                             <button class="cta" type="button" on:click=move |_| ctx.open_page(Page::Plan)>"Посмотреть тарифы"</button>
                         </div>
