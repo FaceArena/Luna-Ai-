@@ -886,11 +886,12 @@ fn PageLab() -> impl IntoView {
                                 {move || ctx.cfg.get().lab.presets.iter().map(|preset| {
                                     let item = preset.clone();
                                     let apply = preset.clone();
+                                    let active_id = preset.id.clone();
                                     let delete_id = preset.id.clone();
                                     view! {
                                         <div class="lab-item">
                                             <div class="lab-item-copy"><b>{item.name.clone()}</b><span>{match item.len.as_str() { "short" => "Кратко", "long" => "Подробно", _ => "Обычно" }}</span></div>
-                                            <button class="lab-mini" type="button" class:on=move || ctx.cfg.get().lab.active_preset.as_deref() == Some(apply.id.as_str()) on:click=move |_| ctx.cfg.update(|cfg| {
+                                            <button class="lab-mini" type="button" class:on=move || ctx.cfg.get().lab.active_preset.as_deref() == Some(active_id.as_str()) on:click=move |_| ctx.cfg.update(|cfg| {
                                                 cfg.len = apply.len.clone(); cfg.lab.active_preset = Some(apply.id.clone());
                                             })>"Применить"</button>
                                             <button class="lab-remove" type="button" aria-label="Удалить пресет" on:click=move |_| ctx.cfg.update(|cfg| {
