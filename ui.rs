@@ -167,9 +167,9 @@ fn globals(ctx: Ctx) {
                         }
                     });
                 }
-                if window().scroll_y().unwrap_or(0.0) != 0.0 {
-                    window().scroll_to_with_x_and_y(0.0, 0.0);
-                }
+                // Не сбрасываем window.scrollTo() на каждом событии VisualViewport:
+                // Safari сам меняет visual viewport при появлении клавиатуры, а принудительный
+                // сброс создаёт гонку с его внутренним repositioning.
             }
         };
         update_viewport();
