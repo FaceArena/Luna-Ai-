@@ -509,7 +509,7 @@ impl Ctx {
             if self.run.get_value() != my {
                 return;
             }
-            let out = clean(answer.trim());
+            let out = clean(String::from_utf8_lossy(&buf).trim());
             if out.is_empty() {
                 return self.fail(ERR.into(), 0);
             }
