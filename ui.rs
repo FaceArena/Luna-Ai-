@@ -560,7 +560,8 @@ fn PageAcc() -> impl IntoView {
     let pass = create_rw_signal(String::new());
     let auth_busy = create_rw_signal(false);
 
-    let go = move |_| {
+    let info = create_rw_signal(String::new());
+    let go = move || {
         if auth_busy.get_untracked() {
             return;
         }
@@ -572,25 +573,32 @@ fn PageAcc() -> impl IntoView {
         if reg && n.chars().count() > 40 {
             return err.set("Имя должно быть не длиннее 40 символов".into());
         }
-        if !m.contains('@') || !m.contains('.') {
+        if m.len() > 254 || !m.contains('@') || !m.rsplit_once('@').map_or(false, |(_, domain)| domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.')) {
             return err.set("Введите корректную почту".into());
         }
-        if p.chars().count() < 8 {
-            return err.set("Пароль не короче 8 символов".into());
+        if p.chars().count() < 8 || p.chars().count() > 128 {
+            return err.set("Пароль должен содержать от 8 до 128 символов".into());
         }
         if reg && !ok.get_untracked() {
             return err.set("Подтвердите согласие с условиями".into());
         }
         err.set(String::new());
+        info.set(String::new());
         auth_busy.set(true);
         spawn_local(async move {
             let path = if reg { "/api/register" } else { "/api/login" };
             let result = api::auth(path, &serde_json::json!({ "name": n, "email": m, "pass": p })).await;
             auth_busy.set(false);
             match result {
-                Ok(me) => {
+                Ok(api::AuthOutcome::SignedIn(me)) => {
                     pass.set(String::new());
                     ctx.finish_login(me);
+                }
+                Ok(api::AuthOutcome::NeedsEmailConfirmation(address)) => {
+                    pass.set(String::new());
+                    up.set(false);
+                    ok.set(false);
+                    info.set(format!("Аккаунт создан. Подтвердите адрес {} по ссылке из письма, затем войдите.", address));
                 }
                 Err(e) => err.set(e),
             }
@@ -622,30 +630,36 @@ fn PageAcc() -> impl IntoView {
                                 <span>"Чтобы хранить чаты и писать ИИ"</span>
                             </div>
                         </div>
-                        <Show when=move || up.get()>
-                            <label class="fl" for="a-name">"Имя"</label>
-                            <input class="fi" id="a-name" maxlength="40" autocomplete="off" prop:value=move || nm.get() on:input=move |e| nm.set(event_target_value(&e))/>
-                        </Show>
-                        <label class="fl" for="a-mail">"Электронная почта"</label>
-                        <input class="fi" id="a-mail" type="email" inputmode="email" autocomplete="email" placeholder="name@mail.com"
-                               prop:value=move || email.get() on:input=move |e| email.set(event_target_value(&e))/>
-                        <label class="fl" for="a-pass">"Пароль"</label>
-                        <input class="fi" id="a-pass" type="password" autocomplete="current-password"
-                               prop:value=move || pass.get() on:input=move |e| pass.set(event_target_value(&e))/>
-                        <div class="grp" style="margin-top:14px">
-                            <div class="row" on:click=move |_| ok.update(|v| *v = !*v)>
-                                <span class="rt">"Принимаю условия и политику"</span><span class="tg" class:on=move || ok.get()></span>
-                            </div>
-                            {doc_row(ctx, None, "Условия использования", "terms", Page::Acc)}
-                            {doc_row(ctx, None, "Политика конфиденциальности", "privacy", Page::Acc)}
-                            {doc_row(ctx, None, "Согласие на обработку данных", "consent", Page::Acc)}
-                        </div>
-                        <p class="err">{move || err.get()}</p>
-                        <button class="cta" disabled=move || auth_busy.get() on:click=go>{move || if auth_busy.get() { "Подождите…" } else if up.get() { "Создать аккаунт" } else { "Войти" }}</button>
-                        <button class="lnk" disabled=move || auth_busy.get() on:click=move |_| { err.set(String::new()); up.update(|v| *v = !*v); }>
-                            {move || if up.get() { "У меня уже есть аккаунт" } else { "Создать аккаунт" }}
-                        </button>
-                        <p class="hint">"Пароль хранится на сервере только в виде хеша."</p>
+                        <form on:submit=move |e: web_sys::SubmitEvent| { e.prevent_default(); go(); }>
+                            <Show when=move || up.get()>
+                                <label class="fl" for="a-name">"Имя"</label>
+                                <input class="fi" id="a-name" maxlength="40" autocomplete="name" prop:value=move || nm.get() on:input=move |e| nm.set(event_target_value(&e))/ >
+                            </Show>
+                            <label class="fl" for="a-mail">"Электронная почта"</label>
+                            <input class="fi" id="a-mail" type="email" inputmode="email" autocomplete="email" required placeholder="name@mail.com"
+                                   prop:value=move || email.get() on:input=move |e| email.set(event_target_value(&e))/ >
+                            <label class="fl" for="a-pass">"Пароль"</label>
+                            <input class="fi" id="a-pass" type="password" minlength="8" maxlength="128" required
+                                   autocomplete=move || if up.get() { "new-password" } else { "current-password" }
+                                   prop:value=move || pass.get() on:input=move |e| pass.set(event_target_value(&e))/ >
+                            <Show when=move || up.get()>
+                                <div class="grp" style="margin-top:14px">
+                                    <div class="row" on:click=move |_| ok.update(|v| *v = !*v)>
+                                        <span class="rt">"Принимаю условия и политику"</span><span class="tg" class:on=move || ok.get()></span>
+                                    </div>
+                                    {doc_row(ctx, None, "Условия использования", "terms", Page::Acc)}
+                                    {doc_row(ctx, None, "Политика конфиденциальности", "privacy", Page::Acc)}
+                                    {doc_row(ctx, None, "Согласие на обработку данных", "consent", Page::Acc)}
+                                </div>
+                            </Show>
+                            <p class="err">{move || err.get()}</p>
+                            <p class="hint">{move || info.get()}</p>
+                            <button class="cta" type="submit" disabled=move || auth_busy.get()>{move || if auth_busy.get() { "Подождите…" } else if up.get() { "Создать аккаунт" } else { "Войти" }}</button>
+                            <button class="lnk" type="button" disabled=move || auth_busy.get() on:click=move |_| { err.set(String::new()); info.set(String::new()); up.update(|v| *v = !*v); }>
+                                {move || if up.get() { "У меня уже есть аккаунт" } else { "Создать аккаунт" }}
+                            </button>
+                            <p class="hint">"Пароль обрабатывается сервером; приложение не хранит его в открытом виде."</p>
+                        </form>
                     }.into_view(),
                 }}
             </div>
