@@ -882,6 +882,10 @@ fn PageLab() -> impl IntoView {
                             <label class="fl" for="lab-preset-instructions">"Дополнительные правила"</label>
                             <textarea class="fi" id="lab-preset-instructions" maxlength="1200" placeholder="Например: сначала вывод, затем короткое объяснение." prop:value=move || preset_instructions.get() on:input=move |e| preset_instructions.set(event_target_value(&e))></textarea>
                             <button class="cta lab-action" type="button" on:click=add_preset>"Сохранить пресет"</button>
+                            <button class="lab-mini" type="button" disabled=move || ctx.cfg.get().lab.active_preset.is_none() on:click=move |_| ctx.cfg.update(|cfg| {
+                                cfg.lab.active_preset = None;
+                                cfg.len = "normal".into();
+                            })>"Отключить активный пресет"</button>
                             <div class="lab-list">
                                 {move || ctx.cfg.get().lab.presets.iter().map(|preset| {
                                     let item = preset.clone();
@@ -896,7 +900,7 @@ fn PageLab() -> impl IntoView {
                                             })>"Применить"</button>
                                             <button class="lab-remove" type="button" aria-label="Удалить пресет" on:click=move |_| ctx.cfg.update(|cfg| {
                                                 cfg.lab.presets.retain(|p| p.id != delete_id);
-                                                if cfg.lab.active_preset.as_deref() == Some(delete_id.as_str()) { cfg.lab.active_preset = None; }
+                                                if cfg.lab.active_preset.as_deref() == Some(delete_id.as_str()) { cfg.lab.active_preset = None; cfg.len = "normal".into(); }
                                             })>"×"</button>
                                         </div>
                                     }
