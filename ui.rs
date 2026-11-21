@@ -754,7 +754,7 @@ fn PageLab() -> impl IntoView {
         let current = ctx.cfg.get_untracked();
         let id = format!("persona-{}", js_sys::Date::now() as u64);
         ctx.cfg.update(|cfg| cfg.lab.personas.push(LabPersona {
-            id, name: label, who: current.who.clone(), rules: current.rules.clone(),
+            id, title: label, name: current.name.clone(), who: current.who.clone(), rules: current.rules.clone(),
         }));
         persona_name.set(String::new());
         ctx.say("Персона сохранена.");
@@ -827,7 +827,7 @@ fn PageLab() -> impl IntoView {
                                     let delete_id = persona.id.clone();
                                     view! {
                                         <div class="lab-item">
-                                            <div class="lab-item-copy"><b>{item.name.clone()}</b><span>{if item.who.is_empty() { "Без описания".to_string() } else { item.who.chars().take(90).collect::<String>() }}</span></div>
+                                            <div class="lab-item-copy"><b>{item.title.clone()}</b><span>{if item.who.is_empty() { "Без описания".to_string() } else { item.who.chars().take(90).collect::<String>() }}</span></div>
                                             <button class="lab-mini" type="button" on:click=move |_| ctx.cfg.update(|cfg| {
                                                 cfg.name = apply.name.clone(); cfg.who = apply.who.clone(); cfg.rules = apply.rules.clone();
                                             })>"Применить"</button>
