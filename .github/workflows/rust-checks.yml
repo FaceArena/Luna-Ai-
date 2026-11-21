@@ -25,7 +25,9 @@ jobs:
       - name: Check Supabase Edge Function
         run: deno check --node-modules-dir=auto supabase/functions/luna-api/index.ts
       - name: Install Trunk
-        run: cargo install trunk --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
       - name: Build production frontend
         run: trunk build --release
       - name: Upload Cloudflare assets
