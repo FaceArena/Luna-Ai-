@@ -350,9 +350,14 @@ Deno.serve(async (req: Request) => {
       const subscription = await resolveSubscription(admin, tokenData.user);
       if (subscription.error) return text(503, "Не удалось проверить доступ к тарифу. Попробуйте позже.");
       const effectiveUser = { ...tokenData.user, app_metadata: { ...(tokenData.user.app_metadata ?? {}), subscription_tier: subscription.tier } };
+      // Login response must carry the server-verified channel state as well.
+      // Otherwise the client defaults channel_member to false until /api/me
+      // is called later, leaving premium model locks visible after login.
+      const channelMember = await isLunaChannelMember(admin, tokenData.user);
       return json(200, {
         id: tokenData.user.id, name, email: tokenData.user.email ?? "",
-        plan: subscription.plan, prompt_limit: promptLimit(effectiveUser),
+        plan: subscription.plan, channel_member: channelMember === true,
+        prompt_limit: promptLimit(effectiveUser),
       }, { "Set-Cookie": sessionCookie(tokenData.access_token) });
     }
 
