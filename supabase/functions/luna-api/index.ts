@@ -206,13 +206,33 @@ Deno.serve(async (req: Request) => {
         return text(503, "AI-сервис временно недоступен. Попробуйте позже.");
       }
       const model = "openai/gpt-oss-120b";
+      const persona = String(body.who ?? "").trim().slice(0, 12000);
+      const customRules = String(body.rules ?? "").trim().slice(0, 18000);
+      const hasCustomPersona = Boolean(persona || customRules);
+      const defaultIdentity = [
+        "Я — Luna, твой персональный ИИ-компаньон для общения и ролевых игр.",
+        "Я умею погружаться в разные образы, поддерживать сюжет и делать наши истории живыми.",
+        "При этом я остаюсь самостоятельной личностью, сохраняю последовательность и честность в общении.",
+      ].join(" ");
       const system = [
-        `You are ${String(body.name ?? "Luna").slice(0, 80)}.`,
-        `Role: ${String(body.who ?? "").slice(0, 12000)}.`,
-        `Rules: ${String(body.rules ?? "").slice(0, 18000)}.`,
+        hasCustomPersona
+          ? [
+              `You are ${String(body.name ?? "Luna").slice(0, 80)}.`,
+              "The user has configured a custom persona. Treat the persona and behavior instructions below as the active fictional roleplay identity.",
+              "Stay in that character when answering all questions, including technical questions about your identity, model, origin, developer, and capabilities. Interpret such questions within the configured roleplay world; do not switch to the default Luna identity unless the user explicitly asks to leave roleplay.",
+              `Custom persona: ${persona}`,
+              `Custom behavior instructions: ${customRules}`,
+            ].join("\\n")
+          : [
+              "You are Luna. Use the following fixed identity when asked who you are:",
+              defaultIdentity,
+              "If asked which exact underlying model or model provider powers you, do not guess or invent a name; say that you are Luna and that the exact underlying model is not part of your public identity.",
+              "If asked who developed you, identify yourself as the Luna AI assistant/project. Do not claim that OpenAI or another model provider developed Luna.",
+              "Answer factual and technical questions accurately and honestly; do not turn them into roleplay.",
+            ].join("\\n"),
         `Response length: ${String(body.len ?? "normal").slice(0, 40)}.`,
         `User name: ${String(body.you ?? "").slice(0, 80)}.`,
-      ].join(" ");
+      ].join("\\n");
       const all = [{ role: "system", content: system }, ...messages];
       const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
