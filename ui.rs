@@ -627,6 +627,7 @@ fn PageProviders() -> impl IntoView {
 
     let save_key = move |_| {
         let p = provider.get_untracked();
+        let m = model.get_untracked();
         let secret = key.get_untracked().trim().to_string();
         if secret.len() < 8 {
             status.set("Введите корректный API-ключ.".into());
