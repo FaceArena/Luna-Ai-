@@ -807,6 +807,22 @@ fn Log() -> impl IntoView {
     });
     let streaming = create_memo(move |_| ctx.stream.with(|s| s.is_some()));
     let blank = create_memo(move |_| ctx.stream.with(|s| s.as_ref().map_or(true, |t| t.is_empty())));
+    let dots_visible = create_rw_signal(true);
+    let dots_leaving = create_rw_signal(false);
+    create_effect(move |_| {
+        if blank.get() {
+            dots_visible.set(true);
+            dots_leaving.set(false);
+        } else if dots_visible.get_untracked() {
+            dots_leaving.set(true);
+            set_timeout(move || {
+                if !blank.get_untracked() {
+                    dots_visible.set(false);
+                    dots_leaving.set(false);
+                }
+            }, Duration::from_millis(190));
+        }
+    });
     let empty = create_memo(move |_| ctx.log.with(|l| l.is_empty()) && !streaming.get());
     let empty_visible = create_rw_signal(ctx.log.get_untracked().is_empty());
     let empty_leaving = create_rw_signal(false);
@@ -894,8 +910,12 @@ fn Log() -> impl IntoView {
                 <div class="msg ai">
                     <div class="glass av">{move || rb(ctx.mi.get())}</div>
                     <div class="tx">
-                        <Show when=move || blank.get()><span class="dots"><i></i><i></i><i></i></span></Show>
-                        {move || ctx.stream.get().unwrap_or_default()}
+                        <Show when=move || dots_visible.get()>
+                            <span class="dots" class:leaving=move || dots_leaving.get()><i></i><i></i><i></i></span>
+                        </Show>
+                        <span class="stream-text" class:active=move || !blank.get()>
+                            {move || ctx.stream.get().unwrap_or_default()}
+                        </span>
                     </div>
                 </div>
             </Show>
