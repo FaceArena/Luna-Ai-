@@ -780,4 +780,5 @@ html, body {
 @media(prefers-reduced-motion:reduce){
   .lab-tabs{scroll-behavior:auto}
 }
-
+/* Keep the switch hit area transparent; only the inset track changes state. */
+.lab-state.on{background:transparent}
