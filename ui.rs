@@ -1033,7 +1033,7 @@ fn Log() -> impl IntoView {
                     dots_visible.set(false);
                     dots_leaving.set(false);
                 }
-            }, Duration::from_millis(190));
+            }, Duration::from_millis(if ctx.mi.get_untracked() > 0 { 120 } else { 190 }));
         }
     });
     let empty = create_memo(move |_| ctx.log.with(|l| l.is_empty()) && !streaming.get());
@@ -1130,9 +1130,9 @@ fn Log() -> impl IntoView {
                     <div class="glass av">{move || rb(ctx.mi.get())}</div>
                     <div class="tx">
                         <Show when=move || dots_visible.get()>
-                            <span class="dots" class:leaving=move || dots_leaving.get()><i></i><i></i><i></i></span>
+                            <span class="dots" class:fast=move || ctx.mi.get() > 0 class:leaving=move || dots_leaving.get()><i></i><i></i><i></i></span>
                         </Show>
-                        <span class="stream-text" class:active=move || !blank.get()>
+                        <span class="stream-text" class:fast=move || ctx.mi.get() > 0 class:active=move || !blank.get()>
                             <For
                                 each=move || { ctx.stream.get().unwrap_or_default().chars().enumerate().collect::<Vec<_>>() }
                                 key=|(i, _)| *i
