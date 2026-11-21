@@ -1,6 +1,5 @@
 use crate::{api, data::data, state::*};
 use leptos::*;
-use gloo_net::http::Request;
 use std::time::Duration;
 use wasm_bindgen::{closure::Closure, JsCast};
 
@@ -409,7 +408,7 @@ fn Sheet() -> impl IntoView {
         <div class="glass sheet" class:on=move || ctx.sheet.get() role="dialog" aria-label="Настройки">
             <div class="grab"></div>
             <div class="pgs">
-                <PageMain/><PageAi/><PageProviders/><PageAcc/><PagePlan/><PageAbout/><PageDoc/>
+                <PageMain/><PageAi/><PageAcc/><PagePlan/><PageAbout/><PageDoc/>
             </div>
         </div>
     }
@@ -457,7 +456,6 @@ fn PageMain() -> impl IntoView {
                 <h3>"ИИ"</h3>
                 <div class="grp">
                     {nav_row("ai", || "Персональный ИИ".into(), move || name(ctx), move || ctx.page.set(Page::Ai))}
-                    {nav_row("bolt", || "Провайдеры и API-ключи".into(), || "Groq · Gemini".into(), move || ctx.page.set(Page::Providers))}
                 </div>
 
                 <h3>"Подписка"</h3>
@@ -555,166 +553,7 @@ fn PageAi() -> impl IntoView {
 fn PageProviders() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     let provider = create_rw_signal("groq".to_string());
-    let model = create_rw_signal("openai/gpt-oss-120b".to_string());
-    let key = create_rw_signal(String::new());
-    let configured = create_rw_signal(false);
-    let status = create_rw_signal(String::new());
-
-    create_effect(move |_| {
-        if ctx.page.get() == Page::Providers {
-            status.set("Загружаем настройки…".into());
-            spawn_local(async move {
-                match Request::get("/api/provider-settings").send().await {
-                    Ok(resp) if resp.ok() => {
-                        match resp.json::<serde_json::Value>().await {
-                            Ok(data) => {
-                                let active = data.get("activeProvider").and_then(|v| v.as_str()).unwrap_or("groq").to_string();
-                                provider.set(active.clone());
-                                if let Some(rows) = data.get("providers").and_then(|v| v.as_array()) {
-                                    if let Some(row) = rows.iter().find(|row| row.get("provider").and_then(|v| v.as_str()) == Some(active.as_str())) {
-                                        model.set(row.get("model").and_then(|v| v.as_str()).unwrap_or("openai/gpt-oss-120b").to_string());
-                                        configured.set(row.get("configured").and_then(|v| v.as_bool()).unwrap_or(false));
-                                    } else {
-                                        model.set(if active == "gemini" { "gemini-3.8-flash" } else { "openai/gpt-oss-120b" }.into());
-                                        configured.set(false);
-                                    }
-                                }
-                                status.set(String::new());
-                            }
-                            Err(_) => status.set("Не удалось прочитать настройки.".into()),
-                        }
-                    }
-                    Ok(resp) if resp.status() == 401 => status.set("Войдите в аккаунт, чтобы настроить провайдера.".into()),
-                    _ => status.set("Не удалось загрузить настройки провайдера.".into()),
-                }
-            });
-        }
-    });
-
-    let select_provider = move |value: String| {
-        provider.set(value.clone());
-        model.set(if value == "gemini" { "gemini-3.8-flash" } else { "openai/gpt-oss-120b" }.into());
-        configured.set(false);
-        status.set(String::new());
-        spawn_local(async move {
-            if let Ok(resp) = Request::get("/api/provider-settings").send().await {
-                if resp.ok() {
-                    if let Ok(data) = resp.json::<serde_json::Value>().await {
-                        if let Some(rows) = data.get("providers").and_then(|v| v.as_array()) {
-                            if let Some(row) = rows.iter().find(|row| row.get("provider").and_then(|v| v.as_str()) == Some(value.as_str())) {
-                                model.set(row.get("model").and_then(|v| v.as_str()).unwrap_or(if value == "gemini" { "gemini-3.8-flash" } else { "openai/gpt-oss-120b" }).to_string());
-                                configured.set(row.get("configured").and_then(|v| v.as_bool()).unwrap_or(false));
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    };
-
-    let save_provider = move |_| {
-        let p = provider.get_untracked();
-        let m = model.get_untracked();
-        status.set("Сохраняем выбор…".into());
-        spawn_local(async move {
-            let body = serde_json::json!({"action":"select","provider":p,"model":m});
-            match Request::post("/api/provider-settings").json(&body).unwrap().send().await {
-                Ok(resp) if resp.ok() => status.set("Провайдер и модель сохранены.".into()),
-                _ => status.set("Не удалось сохранить выбор провайдера.".into()),
-            }
-        });
-    };
-
-    let save_key = move |_| {
-        let p = provider.get_untracked();
-        let m = model.get_untracked();
-        let secret = key.get_untracked().trim().to_string();
-        if secret.len() < 8 {
-            status.set("Введите корректный API-ключ.".into());
-            return;
-        }
-        status.set("Сохраняем ключ в Supabase Vault…".into());
-        spawn_local(async move {
-            let body = serde_json::json!({"action":"set_key","provider":p,"model":m,"key":secret});
-            match Request::post("/api/provider-settings").json(&body).unwrap().send().await {
-                Ok(resp) if resp.ok() => {
-                    key.set(String::new());
-                    configured.set(true);
-                    status.set("Ключ сохранён в защищённом хранилище.".into());
-                }
-                _ => status.set("Не удалось сохранить API-ключ.".into()),
-            }
-        });
-    };
-
-    let delete_key = move |_| {
-        let p = provider.get_untracked();
-        status.set("Удаляем ключ…".into());
-        spawn_local(async move {
-            let body = serde_json::json!({"action":"delete_key","provider":p});
-            match Request::post("/api/provider-settings").json(&body).unwrap().send().await {
-                Ok(resp) if resp.ok() => {
-                    configured.set(false);
-                    key.set(String::new());
-                    status.set("Ключ удалён из Vault.".into());
-                }
-                _ => status.set("Не удалось удалить ключ.".into()),
-            }
-        });
-    };
-
-    view! {
-        <section class=pgc(ctx, Page::Providers)>
-            {ph(ctx, || "AI-провайдеры".into(), move || ctx.page.set(Page::Main))}
-            <div class="sc">
-                <p class="hint">"Выберите модель и сохраните личный API-ключ. Ключ шифруется Supabase Vault и никогда не возвращается в браузер."</p>
-                <label class="fl" for="provider-select">"Провайдер"</label>
-                <select class="fi" id="provider-select" prop:value=move || provider.get()
-                    on:change=move |e| select_provider(event_target_value(&e))>
-                    <option value="groq">"Groq"</option>
-                    <option value="gemini">"Google Gemini"</option>
-                </select>
-                <label class="fl" for="provider-model">"Модель"</label>
-                <select class="fi" id="provider-model" prop:value=move || model.get()
-                    on:change=move |e| model.set(event_target_value(&e))>
-                    <Show when=move || provider.get() == "groq">
-                        <option value="openai/gpt-oss-120b">"GPT OSS 120B"</option>
-                        <option value="openai/gpt-oss-20b">"GPT OSS 20B"</option>
-                    </Show>
-                    <Show when=move || provider.get() == "gemini">
-                        <option value="gemini-3.8-flash">"Gemini 3.8 Flash"</option>
-                        <option value="gemini-3.5-flash-lite">"Gemini 3.5 Flash-Lite"</option>
-                    </Show>
-                </select>
-                <button class="cta" on:click=save_provider>"Сохранить провайдера"</button>
-                <div class="grp" style="margin-top:14px">
-                    <div class="row">
-                        <span class="rt">"API-ключ"</span>
-                        <span class="rv">{move || if configured.get() { "Сохранён" } else { "Не добавлен" }}</span>
-                    </div>
-                </div>
-                <label class="fl" for="provider-key">"Новый API-ключ"</label>
-                <input class="fi" id="provider-key" type="password" autocomplete="off"
-                    placeholder="Вставьте ключ провайдера"
-                    prop:value=move || key.get()
-                    on:input=move |e| key.set(event_target_value(&e))/>
-                <button class="cta" on:click=save_key>"Сохранить ключ в Vault"</button>
-                <Show when=move || configured.get()>
-                    <button class="fi rst" on:click=delete_key>"Удалить сохранённый ключ"</button>
-                </Show>
-                <p class="hint">{move || status.get()}</p>
-                <p class="hint">"Ключи Groq и Gemini хранятся отдельно. Переключение провайдера не удаляет другой ключ."</p>
-            </div>
-        </section>
-    }
-}
-
-#[component]
-fn PageAcc() -> impl IntoView {
-    let ctx = expect_context::<Ctx>();
-    let up = create_rw_signal(false);
-    let ok = create_rw_signal(false);
-    let err = create_rw_signal(String::new());
+    let model = create_rw_signal("openignal(String::new());
     let nm = create_rw_signal(String::new());
     let email = create_rw_signal(String::new());
     let pass = create_rw_signal(String::new());
@@ -847,7 +686,7 @@ fn PageAbout() -> impl IntoView {
                     <div class="row"><span class="rt">"Версия"</span><span class="rv">"2.0 (Rust)"</span></div>
                     <div class="row"><span class="rt">"Хранение данных"</span><span class="rv">"Сервер"</span></div>
                 </div>
-                <p class="hint">"Ответы создаются через выбранного ИИ-провайдера (Groq или Google Gemini). Аккаунт и история чатов хранятся на сервере, настройки внешнего вида — в браузере. Текст разговора и инструкции передаются модели при отправке сообщения."</p>
+                <p class="hint">"Ответы создаются внутренней AI-системой Luna. Аккаунт и история чатов хранятся на сервере, настройки внешнего вида — в браузере. Текст разговора и инструкции передаются AI-системе при отправке сообщения."</p>
             </div>
         </section>
     }
