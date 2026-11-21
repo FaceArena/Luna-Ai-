@@ -268,7 +268,7 @@ impl Ctx {
 
         // Re-check membership when the user returns to the app (for example,
         // after opening Telegram to leave or re-join the channel).
-        window_event_listener(ev::focus, move |_| {
+        let refresh_subscription = move || {
             if self.me.get_untracked().is_none() { return; }
             spawn_local(async move {
                 if let Some(me) = api::me().await {
@@ -279,7 +279,11 @@ impl Ctx {
                     self.me.set(Some(me));
                 }
             });
-        });
+        };
+        // iOS Safari/PWA may restore a page without firing focus consistently.
+        // Reconcile the plan and channel lock state on both focus and pageshow.
+        window_event_listener(ev::focus, move |_| refresh_subscription());
+        window_event_listener(ev::pageshow, move |_| refresh_subscription());
     }
 
     pub fn next_uid(self) -> u64 {
@@ -331,12 +335,23 @@ impl Ctx {
                     self.mi.set(i);
                     self.model_preview.set(i);
                     ls_set("luna-model2", &i.to_string());
-                    self.me.update(|m| {
-                        if let Some(m) = m {
-                            m.plan = i;
-                            if i > 0 { m.channel_member = true; }
-                        }
-                    });
+                    // Do not invent membership state on the client. Re-read the
+                    // server-authoritative plan and Telegram membership immediately.
+                    if let Some(me) = api::me().await {
+                        let verified_plan = me.plan.min(2);
+                        self.mi.set(verified_plan);
+                        self.model_preview.set(verified_plan);
+                        ls_set("luna-model2", &verified_plan.to_string());
+                        self.me.set(Some(me));
+                    } else {
+                        // Keep locks visible until the server confirms membership.
+                        self.me.update(|m| {
+                            if let Some(m) = m {
+                                m.plan = i;
+                                m.channel_member = false;
+                            }
+                        });
+                    }
                 }
                 Err(message) => {
                     self.mi.set(previous);
