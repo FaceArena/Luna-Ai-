@@ -1146,7 +1146,12 @@ fn PageDoc() -> impl IntoView {
 
 fn row_view(ctx: Ctx, r: Row, anim: RwSignal<Option<usize>>, last_ai_id: Memo<Option<u64>>) -> View {
     if r.user {
-        return view! { <div class="msg me">{r.text}</div> }.into_view();
+        return view! {
+            <div class="msg me">
+                {(!r.part.is_empty()).then(|| view! { <img class="msg-image" src=r.part.clone() alt="Прикреплённое изображение"/> })}
+                {r.text}
+            </div>
+        }.into_view();
     }
     let k = ctx.mi.get_untracked();
     if r.fx == 0 {
