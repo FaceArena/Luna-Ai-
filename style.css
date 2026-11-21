@@ -803,3 +803,6 @@ html, body {
   .lab-preset-active{align-items:flex-start;flex-direction:column}
   .lab-preset-disable{width:100%}
 }
+
+/* Make the applied preset state explicit, not color-only. */
+.lab-item .lab-mini[aria-pressed="true"]{min-width:88px;font-weight:650}
