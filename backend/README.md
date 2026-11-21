@@ -15,7 +15,7 @@ This Axum service restores the API surface consumed by the existing Leptos clien
 | DELETE | `/api/chats/:id` | Delete one chat |
 | DELETE | `/api/chats` | Delete all current user's chats |
 | POST | `/api/chat` | Authenticated AI completion |
-| PUT | `/api/plan` | Reject client-side entitlement changes |
+| PUT | `/api/plan` | Save the demo plan choice (no billing) |
 | GET | `/health` | Health check |
 
 ## Required Supabase configuration
