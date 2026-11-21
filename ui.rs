@@ -795,7 +795,7 @@ fn Composer() -> impl IntoView {
 
     let fit = move || {
         if let Some(t) = ta.get_untracked() {
-            let t: web_sys::HtmlTextAreaElement = t.unchecked_into();
+            let t: &web_sys::HtmlTextAreaElement = t.unchecked_ref();
             let st = t.style();
             let _ = st.set_property("height", "auto");
             let h = t.scroll_height().min(140);
