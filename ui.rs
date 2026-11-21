@@ -126,21 +126,8 @@ fn globals(ctx: Ctx) {
         }
     });
 
-    // Закрываем мобильную клавиатуру при касании вне активного поля ввода.
-    // Тапы по другим полям (например, поиску) не должны сбрасывать фокус.
-    window_event_listener(ev::pointerdown, move |e: web_sys::PointerEvent| {
-        let target = e.target().and_then(|t| t.dyn_into::<web_sys::Element>().ok());
-        if target.as_ref().and_then(|t| t.closest("input,textarea,select,[contenteditable='true']").ok().flatten()).is_some() {
-            return;
-        }
-        if let Some(active) = document().active_element().and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok()) {
-            let tag = active.tag_name();
-            if tag == "INPUT" || tag == "TEXTAREA" || active.get_attribute("contenteditable").as_deref() == Some("true") {
-                active.blur();
-            }
-        }
-    });
-
+    // Фокус снимается только жестами внутри ленты (#log):
+    // обычные нажатия по шапке и другим элементам не закрывают клавиатуру.
     window_event_listener(ev::keydown, move |e: web_sys::KeyboardEvent| {
         if e.key() == "Escape" {
             ctx.close_all();
