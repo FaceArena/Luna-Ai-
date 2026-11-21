@@ -265,6 +265,21 @@ impl Ctx {
                 self.finish_login(me);
             }
         });
+
+        // Re-check membership when the user returns to the app (for example,
+        // after opening Telegram to leave or re-join the channel).
+        window_event_listener(ev::focus, move |_| {
+            if self.me.get_untracked().is_none() { return; }
+            spawn_local(async move {
+                if let Some(me) = api::me().await {
+                    let plan = me.plan.min(2);
+                    self.mi.set(plan);
+                    self.model_preview.set(plan);
+                    ls_set("luna-model2", &plan.to_string());
+                    self.me.set(Some(me));
+                }
+            });
+        });
     }
 
     pub fn next_uid(self) -> u64 {
@@ -322,7 +337,6 @@ impl Ctx {
                             if i > 0 { m.channel_member = true; }
                         }
                     });
-                    self.say("Тариф успешно изменён.");
                 }
                 Err(message) => {
                     self.mi.set(previous);

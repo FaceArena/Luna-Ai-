@@ -152,48 +152,44 @@ async function ensureTelegramProviderClaims(base: string, service: string): Prom
   }
 }
 
-async function isLunaChannelMember(admin: any, user: any): Promise<boolean> {
+async function isLunaChannelMember(admin: any, user: any): Promise<boolean | null> {
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
   if (!botToken || !user?.id) {
-    console.warn("luna membership denied: missing bot token or authenticated user");
-    return false;
+    console.warn("luna membership unavailable: missing bot token or authenticated user");
+    return null;
   }
 
-  // Read the Telegram subject from Supabase's trusted identity record.
-  // user_metadata is user-editable and must never be used for authorization.
+  // Only trusted identity claims may be used for Telegram authorization.
   const { data: adminData, error: adminError } = await admin.auth.admin.getUserById(user.id);
   if (adminError || !adminData?.user) {
     console.error("luna membership identity lookup failed", adminError?.message ?? "user not found");
-    return false;
+    return null;
   }
   const identities = Array.isArray(adminData.user.identities) ? adminData.user.identities : [];
   const telegramIdentity = identities.find((identity: any) =>
     identity?.provider === "custom:telegram" || identity?.provider === "telegram"
   );
-  // Telegram OIDC "sub" is an opaque OIDC subject, NOT the Bot API user id.
-  // The numeric Bot API id is exposed as the "id" claim with the profile scope
-  // and is copied into identity_data.custom_claims by Supabase's allowlist.
   const telegramId = String(
     telegramIdentity?.identity_data?.custom_claims?.id ??
     telegramIdentity?.identity_data?.id ??
     ""
   ).trim();
   const telegramUserId = Number(telegramId);
-  if (!/^\d{1,16}$/.test(telegramId) || !Number.isSafeInteger(telegramUserId) || telegramUserId <= 0) {
+  if (!/^\\d{1,16}$/.test(telegramId) || !Number.isSafeInteger(telegramUserId) || telegramUserId <= 0) {
     membershipFailures.set(user.id, "missing_telegram_id");
-    console.warn("luna membership denied: trusted Telegram Bot API id missing or malformed", {
+    console.warn("luna membership unavailable: trusted Telegram Bot API id missing or malformed", {
       identityProviders: identities.map((identity: any) => identity?.provider).filter(Boolean),
       hasBotApiId: Boolean(telegramIdentity?.identity_data?.custom_claims?.id ?? telegramIdentity?.identity_data?.id),
     });
-    return false;
+    return null;
   }
 
   membershipFailures.delete(user.id);
   const cached = membershipCache.get(telegramId);
-  if (cached && Date.now() - cached.checkedAt < (cached.member ? 60_000 : 15_000)) {
-    console.info("luna membership cache", { member: cached.member });
+  if (cached && Date.now() - cached.checkedAt < (cached.member ? 10_000 : 5_000)) {
     return cached.member;
   }
+
   try {
     const response = await fetch(`https://api.telegram.org/bot${botToken}/getChatMember`, {
       method: "POST",
@@ -208,26 +204,36 @@ async function isLunaChannelMember(admin: any, user: any): Promise<boolean> {
         telegramErrorCode: payload?.error_code ?? null,
         telegramDescription: payload?.description ?? "invalid Telegram response",
       });
-      return false;
+      return null;
     }
     const status = String(payload?.result?.status ?? "unknown");
     const member = ["creator", "administrator", "member"].includes(status) ||
       (status === "restricted" && payload?.result?.is_member === true);
-    console.info("luna Telegram membership result", { status, member });
     membershipCache.set(telegramId, { member, checkedAt: Date.now() });
+    console.info("luna Telegram membership result", { status, member });
     return member;
   } catch (error) {
     console.error("luna Telegram membership request failed", error instanceof Error ? error.message : "unknown");
-    return false;
+    return null;
   }
 }
 
 async function resolveSubscription(admin: any, user: any, requestedPlan?: number) {
   const rawPlan = Number(requestedPlan ?? user?.user_metadata?.plan ?? 0);
   const selectedPlan = Number.isInteger(rawPlan) && rawPlan >= 0 && rawPlan <= 2 ? rawPlan : 0;
-  const member = selectedPlan > 0 ? await isLunaChannelMember(admin, user) : false;
+  const membership = selectedPlan > 0 ? await isLunaChannelMember(admin, user) : false;
+  const verified = selectedPlan === 0 || membership !== null;
+  const member = membership === true;
   const plan = member ? selectedPlan : 0;
   const tier: SubscriptionTier = plan === 2 ? "luna_pro" : plan === 1 ? "luna" : "free";
+
+  // A Telegram outage or missing trusted ID is not proof of an unsubscribe.
+  // Fail closed for paid requests, but only persist a downgrade after Telegram
+  // positively confirms that the user is no longer a channel member.
+  if (!verified) {
+    return { plan: 0, tier: "free" as SubscriptionTier, member: false, verified: false, error: false };
+  }
+
   const currentTier = String(user?.app_metadata?.subscription_tier ?? "free");
   if (currentTier !== tier) {
     const { error } = await admin.auth.admin.updateUserById(user.id, {
@@ -235,12 +241,11 @@ async function resolveSubscription(admin: any, user: any, requestedPlan?: number
     });
     if (error) {
       console.error("luna subscription sync failed", error.message);
-      return { plan: 0, tier: "free" as SubscriptionTier, member: false, error: true };
+      return { plan: 0, tier: "free" as SubscriptionTier, member: false, verified: true, error: true };
     }
   }
-  return { plan, tier, member, error: false };
+  return { plan, tier, member, verified: true, error: false };
 }
-
 function tierLimits(tier: SubscriptionTier) {
   if (tier === "luna_pro") return {
     requestsPerMinute: 12, maxMessages: 20, maxMessageChars: 16000,
@@ -369,14 +374,13 @@ Deno.serve(async (req: Request) => {
     if (method === "GET" && path === "/api/me") {
       const subscription = await resolveSubscription(admin, user);
       if (subscription.error) return text(503, "Не удалось проверить доступ к тарифу. Попробуйте позже.");
-      const channelMember = await isLunaChannelMember(admin, user);
-      const effectiveUser = { ...user, app_metadata: { ...(user.app_metadata ?? {}), subscription_tier: subscription.tier } };
+      const effectiveUser = { ...user, app_metadata: { ...(user.app_metadata ?? {}), subscription_tier: subscription.verified ? subscription.tier : "free" } };
       return json(200, {
         id: user.id,
         name: String(user.user_metadata?.name ?? user.user_metadata?.full_name ?? user.user_metadata?.preferred_username ?? user.user_metadata?.username ?? user.user_metadata?.given_name ?? "Пользователь Telegram").trim().slice(0, 40) || "Пользователь Telegram",
         email: user.email ?? "",
         plan: subscription.plan,
-        channel_member: channelMember,
+        channel_member: subscription.member,
         prompt_limit: promptLimit(effectiveUser),
       });
     }
@@ -485,11 +489,17 @@ Deno.serve(async (req: Request) => {
       const body = await req.json().catch(() => null);
       const rawPlan = Number(body?.plan);
       if (!Number.isInteger(rawPlan) || rawPlan < 0 || rawPlan > 2) return text(400, "Некорректный тариф.");
-      if (rawPlan > 0 && !(await isLunaChannelMember(admin, user))) {
-        if (membershipFailures.get(user.id) === "missing_telegram_id") {
-          return text(409, "Данные Telegram устарели. Выйдите из аккаунта и войдите через Telegram снова, чтобы обновить проверку подписки.");
+      if (rawPlan > 0) {
+        const membership = await isLunaChannelMember(admin, user);
+        if (membership === null) {
+          if (membershipFailures.get(user.id) === "missing_telegram_id") {
+            return text(409, "Данные Telegram устарели. Выйдите из аккаунта и войдите через Telegram снова, чтобы обновить проверку подписки.");
+          }
+          return text(503, "Не удалось проверить подписку на Telegram-канал. Попробуйте ещё раз.");
         }
-        return text(403, "Для доступа к премиум-моделям подпишитесь на Telegram-канал Luna AI.");
+        if (!membership) {
+          return text(403, "Для доступа к премиум-моделям подпишитесь на Telegram-канал Luna AI.");
+        }
       }
       // This Edge Function client has no persisted Auth session, so auth.updateUser()
       // cannot update the current user. Use the service-role Admin API after the
@@ -510,7 +520,9 @@ Deno.serve(async (req: Request) => {
 
     if (path === "/api/chat" && method === "POST") {
       const subscription = await resolveSubscription(admin, user);
-      if (subscription.error) return text(503, "Не удалось проверить доступ к тарифу. Попробуйте позже.");
+      if (subscription.error || !subscription.verified) {
+        return text(503, "Не удалось подтвердить подписку на Telegram-канал. Платный доступ временно заблокирован.");
+      }
       const limits = tierLimits(subscription.tier);
       const now = Date.now();
       const recent = (chatRateLimits.get(user.id) ?? []).filter((at) => now - at < 60_000);
