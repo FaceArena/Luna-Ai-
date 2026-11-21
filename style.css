@@ -488,3 +488,13 @@ body {
 html.keyboard-open #shell > footer {
   padding-bottom: 8px;
 }
+
+/* Keep scrolling inside the message list; prevent Safari's native scroll anchoring
+   from competing with the explicit viewport-preservation logic in ui.rs. */
+html, body {
+  position: fixed;
+  inset: 0;
+}
+#log {
+  overflow-anchor: none;
+}
