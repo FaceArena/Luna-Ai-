@@ -81,7 +81,7 @@ fn error(status: StatusCode, message: &'static str) -> Response {
 async fn auth_user(state: &AppState, token: &str) -> Result<SupabaseUser, Response> {
     let response = state.http
         .get(format!("{}/auth/v1/user", state.supabase_url))
-        .header("apikey", &state.supabase_anon_key)
+        .header("apikey", state.supabase_anon_key.as_ref())
         .bearer_auth(token)
         .send().await
         .map_err(|_| error(StatusCode::BAD_GATEWAY, "Не удалось проверить сессию"))?;
@@ -110,7 +110,7 @@ pub async fn register(
 
     let response = match state.http
         .post(format!("{}/auth/v1/signup", state.supabase_url))
-        .header("apikey", &state.supabase_anon_key)
+        .header("apikey", state.supabase_anon_key.as_ref())
         .json(&json!({"email":input.email.trim(),"password":input.pass,"data":{"name":name}}))
         .send().await {
             Ok(response) => response,
@@ -143,7 +143,7 @@ pub async fn login(
 ) -> Response {
     let response = match state.http
         .post(format!("{}/auth/v1/token?grant_type=password", state.supabase_url))
-        .header("apikey", &state.supabase_anon_key)
+        .header("apikey", state.supabase_anon_key.as_ref())
         .json(&json!({"email":input.email.trim(),"password":input.pass}))
         .send().await {
             Ok(response) => response,
@@ -203,7 +203,7 @@ pub async fn list_chats(State(state): State<AppState>, headers: HeaderMap) -> Re
     };
     let response = match state.http
         .get(format!("{}/rest/v1/luna_chats?select=id,title,msgs&order=updated_at.desc", state.supabase_url))
-        .header("apikey", &state.supabase_anon_key)
+        .header("apikey", state.supabase_anon_key.as_ref())
         .bearer_auth(token)
         .send().await {
             Ok(response) => response,
@@ -235,7 +235,7 @@ pub async fn save_chat(
     let response = match state.http
         .post(format!("{}/rest/v1/luna_chats", state.supabase_url))
         .query(&[("on_conflict", "user_id,id")])
-        .header("apikey", &state.supabase_anon_key)
+        .header("apikey", state.supabase_anon_key.as_ref())
         .bearer_auth(token)
         .header("Prefer", "resolution=merge-duplicates,return=minimal")
         .json(&json!({"id":chat.id,"title":chat.title,"msgs":chat.msgs}))
@@ -258,7 +258,7 @@ pub async fn delete_chat(
     let response = match state.http
         .delete(format!("{}/rest/v1/luna_chats", state.supabase_url))
         .query(&[("id", format!("eq.{id}"))])
-        .header("apikey", &state.supabase_anon_key)
+        .header("apikey", state.supabase_anon_key.as_ref())
         .bearer_auth(token)
         .send().await {
             Ok(response) => response,
@@ -274,7 +274,7 @@ pub async fn delete_all_chats(State(state): State<AppState>, headers: HeaderMap)
     };
     let response = match state.http
         .delete(format!("{}/rest/v1/luna_chats", state.supabase_url))
-        .header("apikey", &state.supabase_anon_key)
+        .header("apikey", state.supabase_anon_key.as_ref())
         .bearer_auth(token)
         .send().await {
             Ok(response) => response,
@@ -371,7 +371,7 @@ pub async fn plan(
     let plan = input.plan.min(2);
     let response = match state.http
         .patch(format!("{}/auth/v1/user", state.supabase_url))
-        .header("apikey", &state.supabase_anon_key)
+        .header("apikey", state.supabase_anon_key.as_ref())
         .bearer_auth(token)
         .json(&json!({"data":{"plan":plan}}))
         .send().await {
