@@ -60,6 +60,7 @@ async fn main() {
         .route("/api/chats", get(api::list_chats).delete(api::delete_all_chats))
         .route("/api/chats/:id", put(api::save_chat).delete(api::delete_chat))
         .route("/api/chat", post(api::chat))
+        .route("/api/provider-settings", get(api::get_provider_settings).post(api::update_provider_settings))
         .route("/api/plan", put(api::plan))
         .with_state(state)
         .layer(axum::extract::DefaultBodyLimit::max(512 * 1024))
