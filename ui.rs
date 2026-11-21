@@ -167,7 +167,7 @@ fn Header() -> impl IntoView {
                 <b><em>{move || name(ctx)}</em>" "<svg viewBox="0 0 24 24" inner_html=DOWN></svg></b>
                 <span>{move || if ctx.busy.get() { "Печатает".to_string() } else { model_name(ctx) }}</span>
             </button>
-            <button class="glass chg" aria-label="Сменить тариф" on:click=move |_| ctx.open_sheet(Page::Plan)>"Сменить"</button>
+            <button class="glass chg" aria-label=move || if ctx.me.get().is_some() { "Сменить тариф" } else { "Войти через Telegram" } on:click=move |_| { if ctx.me.get().is_some() { ctx.open_sheet(Page::Plan) } else { ctx.open_sheet(Page::Acc) } }>{move || if ctx.me.get().is_some() { "Сменить" } else { "Войти" }}</button>
             <button class="glass ib" id="palb" aria-label="Цвета" on:click=move |_| { ctx.msh_open.set(false); ctx.pal_open.update(|v| *v = !*v) }>
                 <span class="orb"></span>
             </button>
