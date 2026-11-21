@@ -337,19 +337,19 @@ fn ph(ctx: Ctx, title: impl Fn() -> String + 'static, back: impl Fn() + 'static)
 
 fn nav_row(icn: &'static str, t: impl Fn() -> String + 'static, v: impl Fn() -> String + 'static, f: impl Fn() + 'static) -> impl IntoView {
     view! {
-        <div class="row" on:click=move |_| f()>
+        <button type="button" class="row navrow" on:click=move |_| f()>
             {ic(icn)}<span class="rt">{t}</span><span class="rv">{v}</span>
             <svg class="ch" viewBox="0 0 24 24" inner_html=CHEV></svg>
-        </div>
+        </button>
     }
 }
 
 fn doc_row(ctx: Ctx, icn: Option<&'static str>, t: &'static str, key: &'static str, from: Page) -> impl IntoView {
     view! {
-        <div class="row" on:click=move |_| ctx.open_doc(key, from)>
+        <button type="button" class="row navrow" on:click=move |_| ctx.open_doc(key, from)>
             {icn.map(ic)}<span class="rt">{t}</span>
             <svg class="ch" viewBox="0 0 24 24" inner_html=CHEV></svg>
-        </div>
+        </button>
     }
 }
 
