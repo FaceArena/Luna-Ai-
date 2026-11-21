@@ -810,8 +810,7 @@ fn PageMemory() -> impl IntoView {
                                                             }
                                                             busy.set(false);
                                                         });
-                                                    }
-                                                }>"Сохранить"</button>
+                                                    }>"Сохранить"</button>
                                                 <button class="glass" disabled=move || busy.get() on:click=move |_| {
                                                         let id = id.clone();
                                                         busy.set(true);
@@ -825,8 +824,7 @@ fn PageMemory() -> impl IntoView {
                                                             }
                                                             busy.set(false);
                                                         });
-                                                    }
-                                                }>{move || if pinned.get() { "Открепить" } else { "Закрепить" }}</button>
+                                                    }>{move || if pinned.get() { "Открепить" } else { "Закрепить" }}</button>
                                                 <button class="glass mem-delete" disabled=move || busy.get() on:click=move |_| {
                                                         let id = id.clone();
                                                         busy.set(true);
@@ -837,8 +835,7 @@ fn PageMemory() -> impl IntoView {
                                                             } else { ctx.say("Не удалось удалить запись."); }
                                                             busy.set(false);
                                                         });
-                                                    }
-                                                }>"Удалить"</button>
+                                                    }>"Удалить"</button>
                                             </div>
                                         </div>
                                     }
