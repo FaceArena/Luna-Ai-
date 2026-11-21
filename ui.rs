@@ -290,7 +290,7 @@ fn ModelPop() -> impl IntoView {
                 <div class="mc" class:pro=m.pro class:sel=move || ctx.model_preview.get() == k>
                     <div class="glass ic">{rb(k)}</div>
                     <div class="mt"><b>{m.n.clone()}</b><span>{m.d.clone()}</span></div>
-                    {if m.pro && !ctx.me.get().map(|me| me.channel_member).unwrap_or(false) {
+                    {if m.pro && !ctx.me.get().map(|me| me.channel_member || me.plan > 0).unwrap_or(false) {
                         view! { <svg class="lk" viewBox="0 0 24 24" inner_html=LOCK></svg> }.into_view()
                     } else if !m.pro {
                         view! { <em>"авто"</em> }.into_view()
