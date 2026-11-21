@@ -326,8 +326,11 @@ Deno.serve(async (req: Request) => {
         .select("category,content,importance,confidence,source,chat_id")
         .eq("user_id", user.id).or(body.keep === false ? "chat_id.is.null" : `chat_id.is.null,chat_id.eq.${chatId}`)
         .order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(40);
-      const { data: storyState } = await userClient.from("luna_chat_memory_state")
-        .select("summary,last_scene,open_threads").eq("user_id", user.id).eq("chat_id", chatId).maybeSingle();
+      const storyStateResult = keepChat
+        ? await userClient.from("luna_chat_memory_state")
+          .select("summary,last_scene,open_threads").eq("user_id", user.id).eq("chat_id", chatId).maybeSingle()
+        : { data: null };
+      const storyState = storyStateResult.data;
       const memoryContext = (memoryRows ?? []).map((m: any) =>
         `[${m.category}; ${m.source === "correction" ? "исправление пользователя" : "память"}; ${m.chat_id === null ? "общая память" : "этот чат"}] ${m.content}`
       ).join("\n").slice(0, 9000);
