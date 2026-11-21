@@ -616,14 +616,26 @@ impl Ctx {
         let cfg = self.cfg.get_untracked();
         let h = self.hist.get_untracked();
         let skip = h.len().saturating_sub(20);
-        let last_message = h.iter().rev().find(|m| m.role == "user").map(|m| m.content.to_lowercase()).unwrap_or_default();
-        let lore_context = cfg.lab.lorebooks.iter()
-            .filter(|book| book.enabled && book.keywords.iter().any(|keyword| {
-                let keyword = keyword.trim().to_lowercase();
-                !keyword.is_empty() && last_message.contains(&keyword)
-            }))
+        let recent_user_context = h.iter().rev()
+            .filter(|message| message.role == "user")
+            .take(3)
+            .map(|message| message.content.to_lowercase())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut matched_lorebooks = cfg.lab.lorebooks.iter()
+            .filter(|book| book.enabled)
+            .filter_map(|book| {
+                let score = book.keywords.iter().filter(|keyword| {
+                    let keyword = keyword.trim().to_lowercase();
+                    !keyword.is_empty() && recent_user_context.contains(&keyword)
+                }).count();
+                (score > 0).then_some((score, book))
+            })
+            .collect::<Vec<_>>();
+        matched_lorebooks.sort_by(|a, b| b.0.cmp(&a.0));
+        let lore_context = matched_lorebooks.into_iter()
             .take(5)
-            .map(|book| format!("[{}]\n{}", book.name, book.content))
+            .map(|(_, book)| format!("[{}]\n{}", book.name, book.content))
             .collect::<Vec<_>>()
             .join("\n\n")
             .chars().take(8000).collect::<String>();
