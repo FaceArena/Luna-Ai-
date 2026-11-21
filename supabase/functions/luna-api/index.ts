@@ -27,7 +27,14 @@ Deno.serve(async (req: Request) => {
   const base = Deno.env.get("SUPABASE_URL")!;
   const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
   const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const path = new URL(req.url).pathname.replace(/^\/functions\/v1\/luna-api/, "") || "/";
+  // Normalize both function-relative and full Supabase gateway paths.
+  // Auth endpoints must be recognized before the authenticated-route guard.
+  const requestPath = new URL(req.url).pathname;
+  const functionMarker = "/luna-api";
+  const markerIndex = requestPath.indexOf(functionMarker);
+  const path = (markerIndex >= 0
+    ? requestPath.slice(markerIndex + functionMarker.length)
+    : requestPath) || "/";
   const method = req.method;
   const admin = createClient(base, service, { auth: { persistSession: false, autoRefreshToken: false } });
 
