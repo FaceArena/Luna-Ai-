@@ -635,7 +635,7 @@ fn PageProviders() -> impl IntoView {
         }
         status.set("Сохраняем ключ в Supabase Vault…".into());
         spawn_local(async move {
-            let body = serde_json::json!({"action":"set_key","provider":p,"key":secret});
+            let body = serde_json::json!({"action":"set_key","provider":p,"model":m,"key":secret});
             match Request::post("/api/provider-settings").json(&body).unwrap().send().await {
                 Ok(resp) if resp.ok() => {
                     key.set(String::new());
