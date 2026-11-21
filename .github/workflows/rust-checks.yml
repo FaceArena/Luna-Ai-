@@ -23,4 +23,4 @@ jobs:
         with:
           deno-version: v2.x
       - name: Check Supabase Edge Function
-        run: deno check supabase/functions/luna-api/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/luna-api/index.ts
