@@ -906,12 +906,12 @@ fn PageLab() -> impl IntoView {
                     }.into_view(),
                     "vectors" => view! {
                         <div class="lab-panel">
-                            <div class="lab-heading"><b>"Векторная память"</b><span class="lab-status">"Не подключена"</span></div>
-                            <p class="hint">"Сейчас лорбуки активируются по ключевым словам, а память Luna использует сохранённые факты и состояние истории. Семантический поиск по embeddings пока не выполняется."</p>
-                            <div class="lab-info-row"><span>"Embeddings-модель"</span><b>"Не настроена"</b></div>
-                            <div class="lab-info-row"><span>"Векторное хранилище"</span><b>"pgvector не подключён"</b></div>
-                            <div class="lab-info-row"><span>"Поиск по смыслу"</span><b>"Отключён"</b></div>
-                            <p class="hint">"Для включения нужны выбранная embedding-модель, таблица векторных данных, миграция БД и серверный поиск с проверкой доступа к данным пользователя. Я не буду показывать фиктивный переключатель, пока этот контур не готов."</p>
+                            <div class="lab-heading"><b>"Векторная память"</b><span class="lab-status lab-ready">"Подключена"</span></div>
+                            <p class="hint">"Luna преобразует записи памяти и включённые лорбуки в векторы, а затем ищет подходящий контекст по смыслу сообщения — даже если формулировки отличаются."</p>
+                            <div class="lab-info-row"><span>"Embeddings-модель"</span><b>"Supabase gte-small · 384"</b></div>
+                            <div class="lab-info-row"><span>"Векторное хранилище"</span><b>"Postgres pgvector · HNSW"</b></div>
+                            <div class="lab-info-row"><span>"Семантический поиск"</span><b>"До 8 совпадений на запрос"</b></div>
+                            <p class="hint">"Существующие записи памяти индексируются постепенно при обращениях. Новые и изменённые лорбуки индексируются при сохранении. В поиск попадают только данные текущего аккаунта."</p>
                         </div>
                     }.into_view(),
                     _ => view! {
