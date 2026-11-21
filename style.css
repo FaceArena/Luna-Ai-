@@ -11,8 +11,6 @@
   box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
   color-scheme:dark;
 }
-@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
-  --bg:#eef0f7;--fg:#14141c;--fg2:rgba(20,20,28,.58);--glass:rgba(255,255,255,.5);--glass2:rgba(255,255,255,.8);--edge:rgba(255,255,255,.95);--shadow:rgba(40,40,80,.18);color-scheme:light}}
 :root[data-theme="light"]{--bg:#eef0f7;--fg:#14141c;--fg2:rgba(20,20,28,.58);--glass:rgba(255,255,255,.5);--glass2:rgba(255,255,255,.8);--edge:rgba(255,255,255,.95);--shadow:rgba(40,40,80,.18);color-scheme:light}
 :root[data-theme="dark"]{--bg:#07070c;--fg:#f2f2f7;--fg2:rgba(242,242,247,.58);--glass:rgba(255,255,255,.075);--glass2:rgba(255,255,255,.14);--edge:rgba(255,255,255,.28);--shadow:rgba(0,0,0,.45)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -183,7 +181,6 @@ textarea::placeholder{color:var(--fg2)}
 .send:not(:disabled):hover svg{transform:translateY(-2px)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01s!important}}
 .bg{--px:0;--py:0;--vig:rgba(0,0,0,.55)}
-@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) .bg{--vig:rgba(70,70,130,.22)}}
 :root[data-theme="light"] .bg{--vig:rgba(70,70,130,.22)}
 
 .spot{position:absolute;inset:0;background:radial-gradient(ellipse 75% 48% at 50% 30%,color-mix(in srgb,var(--b) 34%,transparent),transparent 72%);opacity:.85}
@@ -490,7 +487,6 @@ body {
   left: 0;
   height: var(--vvh, 100%);
   transition: none !important;
-  will-change: top, height;
 }
 #shell {
   flex: 1 1 0%;
