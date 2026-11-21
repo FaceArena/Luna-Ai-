@@ -21,6 +21,16 @@ function sessionCookie(token: string) {
 }
 const clearCookie = "luna_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0";
 const chatRateLimits = new Map<string, number[]>();
+const promptWordCount = (value: unknown) =>
+  typeof value === "string" && value.trim()
+    ? value.trim().split(/\s+/u).filter(Boolean).length
+    : 0;
+const promptLimit = (user: any) => {
+  const tier = String(user?.app_metadata?.subscription_tier ?? "free");
+  if (tier === "luna_pro") return 1500;
+  if (tier === "luna") return 500;
+  return 100;
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -77,9 +87,11 @@ Deno.serve(async (req: Request) => {
       ).trim().slice(0, 40) || "Пользователь Telegram";
       const plan = Math.min(2, Number(metadata.plan ?? 0) || 0);
       return json(200, {
+        id: tokenData.user.id,
         name,
         email: tokenData.user.email ?? "",
         plan,
+        prompt_limit: promptLimit(tokenData.user),
       }, { "Set-Cookie": sessionCookie(tokenData.access_token) });
     }
 
@@ -100,10 +112,40 @@ Deno.serve(async (req: Request) => {
 
     if (method === "GET" && path === "/api/me") {
       return json(200, {
+        id: user.id,
         name: String(user.user_metadata?.name ?? user.user_metadata?.full_name ?? user.user_metadata?.preferred_username ?? user.user_metadata?.username ?? user.user_metadata?.given_name ?? "Пользователь Telegram").trim().slice(0, 40) || "Пользователь Telegram",
         email: user.email ?? "",
         plan: Math.min(2, Number(user.user_metadata?.plan ?? 0) || 0),
+        prompt_limit: promptLimit(user),
       });
+    }
+
+    if (path === "/api/personal-settings" && method === "GET") {
+      const cfg = user.user_metadata?.luna_cfg;
+      return json(200, cfg && typeof cfg === "object" ? cfg : null);
+    }
+    if (path === "/api/personal-settings" && method === "PUT") {
+      const body = await req.json().catch(() => null);
+      if (!body || typeof body !== "object") return text(400, "Некорректные настройки.");
+      const settings = {
+        name: String(body.name ?? "Luna").slice(0, 80),
+        who: String(body.who ?? "").slice(0, 12000),
+        rules: String(body.rules ?? "").slice(0, 18000),
+        len: ["short", "normal", "long"].includes(body.len) ? body.len : "normal",
+        you: String(body.you ?? "").slice(0, 80),
+        theme: ["auto", "dark", "light"].includes(body.theme) ? body.theme : "auto",
+        motion: body.motion !== false,
+        fs: ["s", "m", "l"].includes(body.fs) ? body.fs : "m",
+        keep: body.keep !== false,
+        glass: Math.max(0, Math.min(100, Number(body.glass) || 0)),
+      };
+      const words = promptWordCount(settings.who) + promptWordCount(settings.rules);
+      const limit = promptLimit(user);
+      if (words > limit) {
+        return json(402, { error: "Лимит слов в персональных инструкциях превышен.", words, limit });
+      }
+      const { error } = await userClient.auth.updateUser({ data: { luna_cfg: settings } });
+      return error ? text(502, "Не удалось сохранить персональные настройки.") : json(200, { ok: true });
     }
 
     if (path === "/api/chats" && method === "GET") {
@@ -155,6 +197,9 @@ Deno.serve(async (req: Request) => {
       if (!messages.length || messages.length > 20 || messages.some((m: any) =>
         !["user", "assistant"].includes(m.role) || typeof m.content !== "string" || m.content.length > 16000))
         return text(400, "Слишком длинный запрос или некорректная история.");
+      const words = promptWordCount(body.who) + promptWordCount(body.rules);
+      const limit = promptLimit(user);
+      if (words > limit) return json(402, { error: "Лимит слов в персональных инструкциях превышен.", words, limit });
       const { data: apiKey, error: keyError } = await admin.rpc("luna_get_global_secret", {
         p_name: "luna_global_groq_api_key",
       });
@@ -164,8 +209,8 @@ Deno.serve(async (req: Request) => {
       const model = "openai/gpt-oss-120b";
       const system = [
         `You are ${String(body.name ?? "Luna").slice(0, 80)}.`,
-        `Role: ${String(body.who ?? "").slice(0, 1000)}.`,
-        `Rules: ${String(body.rules ?? "").slice(0, 4000)}.`,
+        `Role: ${String(body.who ?? "").slice(0, 12000)}.`,
+        `Rules: ${String(body.rules ?? "").slice(0, 18000)}.`,
         `Response length: ${String(body.len ?? "normal").slice(0, 40)}.`,
         `User name: ${String(body.you ?? "").slice(0, 80)}.`,
       ].join(" ");
