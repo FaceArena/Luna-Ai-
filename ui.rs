@@ -442,7 +442,7 @@ fn Sheet() -> impl IntoView {
         <div class="glass sheet" class:on=move || ctx.sheet.get() role="dialog" aria-label="Настройки">
             <div class="grab"></div>
             <div class="pgs">
-                <PageMain/><PageAi/><PageAcc/><PagePlan/><PageAbout/><PageDoc/>
+                <PageMain/><PageAi/><PageAcc/><PagePlan/><PageMemory/><PageAbout/><PageDoc/>
             </div>
         </div>
     }
@@ -490,6 +490,11 @@ fn PageMain() -> impl IntoView {
                 <h3>"ИИ"</h3>
                 <div class="grp">
                     {nav_row("ai", || "Персональный ИИ".into(), move || name(ctx), move || ctx.open_page(Page::Ai))}
+                </div>
+
+                <h3>"Память"</h3>
+                <div class="grp">
+                    {nav_row("clock", || "Память Luna".into(), || "Истории и факты".into(), move || ctx.open_page(Page::Memory))}
                 </div>
 
                 <h3>"Подписка"</h3>
@@ -704,6 +709,144 @@ fn PagePlan() -> impl IntoView {
                     }
                 }).collect_view()}
                 <p class="hint">"Оплата пока не подключена. Бесплатный лимит — 100 слов. Лимиты Luna (500 слов) и Luna Pro (1500 слов) включатся только после подтверждённой оплаты. Выбор карточки сейчас не оформляет подписку."</p>
+            </div>
+        </section>
+    }
+}
+
+
+#[component]
+fn PageMemory() -> impl IntoView {
+    let ctx = expect_context::<Ctx>();
+    let items = create_rw_signal(Vec::<Memory>::new());
+    let loading = create_rw_signal(false);
+    let error = create_rw_signal(String::new());
+
+    create_effect(move |_| {
+        if ctx.page.get() == Page::Memory && ctx.me.get().is_some() {
+            loading.set(true);
+            error.set(String::new());
+            spawn_local(async move {
+                match api::memories().await {
+                    Ok(rows) => items.set(rows),
+                    Err(_) => error.set("Не удалось загрузить память. Проверьте подключение и попробуйте снова.".into()),
+                }
+                loading.set(false);
+            });
+        }
+    });
+
+    let category_name = |category: &str| -> &'static str {
+        match category {
+            "character" => "Персонажи",
+            "relationship" => "Отношения",
+            "world" => "Мир",
+            "event" => "События",
+            "preference" => "Предпочтения",
+            "correction" => "Исправления",
+            "open_thread" => "Незавершённые линии",
+            _ => "Другое",
+        }
+    };
+
+    view! {
+        <section class=pgc(ctx, Page::Memory)>
+            {ph(ctx, || "Память Luna".into(), move || ctx.open_page(Page::Main))}
+            <div class="sc">
+                <p class="hint" style="margin-bottom:14px">"Здесь хранятся подтверждённые факты о персонажах, отношениях и событиях. Закреплённые записи имеют приоритет. Память можно исправить или удалить."</p>
+                {move || if ctx.me.get().is_none() {
+                    view! { <div class="grp"><p class="hint">"Войдите в аккаунт, чтобы просматривать сохранённую память."</p></div> }.into_view()
+                } else if loading.get() && items.get().is_empty() {
+                    view! { <p class="hint">"Загружаем память…"</p> }.into_view()
+                } else if !error.get().is_empty() {
+                    view! {
+                        <div class="grp">
+                            <p class="hint">{move || error.get()}</p>
+                            <button class="fi rst" on:click=move |_| {
+                                loading.set(true);
+                                spawn_local(async move {
+                                    match api::memories().await {
+                                        Ok(rows) => { items.set(rows); error.set(String::new()); }
+                                        Err(_) => error.set("Не удалось загрузить память.".into()),
+                                    }
+                                    loading.set(false);
+                                });
+                            }>"Повторить"</button>
+                        </div>
+                    }.into_view()
+                } else if items.get().is_empty() {
+                    view! { <div class="grp"><p class="hint">"Пока нет сохранённых воспоминаний. Важные подтверждённые факты Luna будет добавлять автоматически после разговоров."</p></div> }.into_view()
+                } else {
+                    view! {
+                        <div class="mem-list">
+                            <For
+                                each=move || items.get()
+                                key=|m| m.id.clone()
+                                children=move |m| {
+                                    let id = m.id.clone();
+                                    let edit = create_rw_signal(m.content.clone());
+                                    let busy = create_rw_signal(false);
+                                    let pinned = m.is_pinned;
+                                    let category = category_name(&m.category).to_string();
+                                    let scope = if m.chat_id.is_some() { "Этот чат" } else { "Общая память" };
+                                    view! {
+                                        <div class="grp mem-item">
+                                            <div class="mem-meta">
+                                                <span>{category}</span>
+                                                <span>{scope}</span>
+                                                <span>{format!("Важность {}", m.importance)}</span>
+                                            </div>
+                                            <textarea class="fi mem-edit" prop:value=move || edit.get()
+                                                on:input=move |e| edit.set(event_target_value(&e))></textarea>
+                                            <div class="mem-actions">
+                                                <button class="glass" disabled=move || busy.get() on:click={
+                                                    let id=id.clone();
+                                                    move |_| {
+                                                        busy.set(true);
+                                                        let value=edit.get_untracked();
+                                                        spawn_local(async move {
+                                                            match api::update_memory(&id, &serde_json::json!({"content":value})).await {
+                                                                Ok(saved) => { items.update(|all| if let Some(row)=all.iter_mut().find(|x| x.id==saved.id) { *row=saved; }); ctx.say("Память обновлена."); }
+                                                                Err(_) => ctx.say("Не удалось сохранить запись."),
+                                                            }
+                                                            busy.set(false);
+                                                        });
+                                                    }
+                                                }>"Сохранить"</button>
+                                                <button class="glass" disabled=move || busy.get() on:click={
+                                                    let id=id.clone();
+                                                    move |_| {
+                                                        busy.set(true);
+                                                        spawn_local(async move {
+                                                            match api::update_memory(&id, &serde_json::json!({"is_pinned":!pinned})).await {
+                                                                Ok(saved) => items.update(|all| if let Some(row)=all.iter_mut().find(|x| x.id==saved.id) { *row=saved; }),
+                                                                Err(_) => ctx.say("Не удалось изменить закрепление."),
+                                                            }
+                                                            busy.set(false);
+                                                        });
+                                                    }
+                                                }>{if pinned { "Открепить" } else { "Закрепить" }}</button>
+                                                <button class="glass mem-delete" disabled=move || busy.get() on:click={
+                                                    let id=id.clone();
+                                                    move |_| {
+                                                        busy.set(true);
+                                                        spawn_local(async move {
+                                                            if api::delete_memory(&id).await {
+                                                                items.update(|all| all.retain(|row| row.id != id));
+                                                                ctx.say("Запись удалена.");
+                                                            } else { ctx.say("Не удалось удалить запись."); }
+                                                            busy.set(false);
+                                                        });
+                                                    }
+                                                }>"Удалить"</button>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            />
+                        </div>
+                    }.into_view()
+                }}
             </div>
         </section>
     }
