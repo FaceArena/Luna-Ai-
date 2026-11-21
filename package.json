@@ -1,0 +1,12 @@
+{
+  "name": "luna-ai",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "trunk build --release",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
