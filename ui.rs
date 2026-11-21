@@ -748,8 +748,8 @@ fn PageLab() -> impl IntoView {
     let add_persona = move |_| {
         let label = persona_name.get_untracked().trim().to_string();
         if label.is_empty() {
-            return;
             ctx.say("Укажите название персоны.");
+            return;
         }
         let current = ctx.cfg.get_untracked();
         let id = format!("persona-{}", js_sys::Date::now() as u64);
@@ -763,8 +763,8 @@ fn PageLab() -> impl IntoView {
     let add_preset = move |_| {
         let label = preset_name.get_untracked().trim().to_string();
         if label.is_empty() {
-            return;
             ctx.say("Укажите название пресета.");
+            return;
         }
         let id = format!("preset-{}", js_sys::Date::now() as u64);
         let len = preset_len.get_untracked();
@@ -781,8 +781,8 @@ fn PageLab() -> impl IntoView {
         let keywords = lore_keywords.get_untracked().split(',').map(|v| v.trim().to_string())
             .filter(|v| !v.is_empty()).take(20).collect::<Vec<_>>();
         if label.is_empty() || content.is_empty() || keywords.is_empty() {
-            return;
             ctx.say("Заполните название, ключевые слова и содержание лорбука.");
+            return;
         }
         let id = format!("lore-{}", js_sys::Date::now() as u64);
         ctx.cfg.update(|cfg| cfg.lab.lorebooks.push(LabLorebook {
