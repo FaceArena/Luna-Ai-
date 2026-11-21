@@ -850,6 +850,12 @@ fn Composer() -> impl IntoView {
         ctx.send(draft.get_untracked());
         if ctx.busy.get_untracked() {
             draft.set(String::new());
+            // Сразу снимаем фокус: iOS начинает закрывать клавиатуру в том же
+            // пользовательском событии, а footer следует за изменением viewport.
+            if let Some(t) = ta.get_untracked() {
+                let t: &web_sys::HtmlElement = t.unchecked_ref();
+                t.blur();
+            }
             request_animation_frame(fit);
         }
     };
@@ -863,7 +869,7 @@ fn Composer() -> impl IntoView {
                           on:keydown=move |e: web_sys::KeyboardEvent| {
                               if e.key() == "Enter" && !e.shift_key() && !coarse() { e.prevent_default(); go(); }
                           }
-                          on:focus=move |_| set_timeout(move || ctx.scroll(false), Duration::from_millis(300))></textarea>
+                          on:focus=move |_| request_animation_frame(move || ctx.scroll(false))></textarea>
                 <button class="glass send" id="send"
                         aria-label=move || if ctx.busy.get() { "Стоп" } else { "Отправить" }
                         disabled=move || !ctx.busy.get() && draft.get().trim().is_empty()
