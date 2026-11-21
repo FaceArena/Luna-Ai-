@@ -145,9 +145,6 @@ fn globals(ctx: Ctx) {
             let root = root.clone();
             let vv = vv.clone();
             move || {
-                let was_at_bottom = document().get_element_by_id("log").map_or(true, |el| {
-                    el.scroll_height() - el.scroll_top() - el.client_height() <= 80
-                });
                 let height = vv.height().max(1.0);
                 let offset_top = vv.offset_top().max(0.0);
                 let layout_h = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(height);
@@ -164,13 +161,6 @@ fn globals(ctx: Ctx) {
                 }
                 let _ = root.class_list().toggle_with_force("keyboard-open", keyboard_open);
 
-                if was_at_bottom {
-                    request_animation_frame(move || {
-                        if let Some(el) = document().get_element_by_id("log") {
-                            el.set_scroll_top(el.scroll_height());
-                        }
-                    });
-                }
             }
         });
         update();
@@ -179,7 +169,6 @@ fn globals(ctx: Ctx) {
             move || u()
         });
         let _ = vv.add_event_listener_with_callback("resize", fit.as_ref().unchecked_ref());
-        let _ = vv.add_event_listener_with_callback("scroll", fit.as_ref().unchecked_ref());
         fit.forget();
 
         // iOS may omit the final viewport resize when the keyboard closes.
@@ -1102,7 +1091,6 @@ fn Log() -> impl IntoView {
     });
     let last_ai_id = create_memo(move |_| ctx.log.with(|l| l.iter().rev().find(|r| !r.user).map(|r| r.id)));
     let log_el = ctx.log_el;
-    let touch_start_y = store_value(0.0f64);
     let near_bottom = create_rw_signal(true);
     let show_jump = create_rw_signal(false);
     let scroll_bottom = move |smooth: bool| {
@@ -1119,7 +1107,7 @@ fn Log() -> impl IntoView {
         let _ = ctx.log.get();
         if near_bottom.get_untracked() {
             show_jump.set(false);
-            scroll_bottom(true);
+            scroll_bottom(false);
         } else {
             show_jump.set(true);
         }
@@ -1133,14 +1121,6 @@ fn Log() -> impl IntoView {
 
     view! {
         <main id="log" node_ref=log_el
-              on:pointerdown=move |e: web_sys::PointerEvent| touch_start_y.set_value(e.client_y() as f64)
-              on:pointerup=move |e: web_sys::PointerEvent| {
-                  if e.client_y() as f64 - touch_start_y.get_value() > 55.0 {
-                      if let Some(active) = document().get_element_by_id("inp").and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok()) {
-                          let _ = active.blur();
-                      }
-                  }
-              }
               on:click=move |_| {
                   if document().document_element().map_or(false, |el| el.class_list().contains("keyboard-open")) {
                       if let Some(active) = document().get_element_by_id("inp").and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok()) {
