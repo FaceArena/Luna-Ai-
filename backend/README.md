@@ -1,31 +1,41 @@
-# Luna server
+# Luna API server
 
-This crate is the server-side foundation for Luna's provider integration.
+This Axum service restores the API surface consumed by the existing Leptos client.
 
-## Current state
+## Implemented routes
 
-- Axum health endpoint: `GET /health`.
-- Server-only Groq and Gemini request adapters in `src/providers.rs`.
-- The provider adapters currently implement non-streaming completions.
-- No chat route is exposed yet. This is intentional: the repository does not currently contain the authentication/session backend described by the root README. Exposing a chat endpoint before restoring authenticated sessions would create an unauthenticated, billable API.
-- No Supabase project migration has been applied. Confirm the Luna project before applying `migrations/0001_provider_settings.sql`.
+| Method | Route | Purpose |
+|---|---|---|
+| POST | `/api/register` | Create Supabase Auth account |
+| POST | `/api/login` | Password sign-in |
+| GET | `/api/me` | Validate the HttpOnly session cookie |
+| POST | `/api/logout` | Clear the session cookie |
+| GET | `/api/chats` | List current user's chat history |
+| PUT | `/api/chats/:id` | Upsert a chat |
+| DELETE | `/api/chats/:id` | Delete one chat |
+| DELETE | `/api/chats` | Delete all current user's chats |
+| POST | `/api/chat` | Authenticated AI completion |
+| PUT | `/api/plan` | Reject client-side entitlement changes |
+| GET | `/health` | Health check |
 
-## Run
+## Required Supabase configuration
 
-```sh
-cargo run --manifest-path backend/Cargo.toml
-```
+Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in the server environment. The browser never receives a service-role key. Supabase Auth issues a short-lived access token stored in an HttpOnly, Secure, SameSite=Lax cookie. Supabase REST requests use that user's JWT, so database RLS policies scope chat access to `auth.uid()`.
 
-The health endpoint listens on `PORT` (default `3000`).
+Apply migrations in order to the confirmed Luna Supabase project:
 
-## Security requirements before enabling chat
+1. `migrations/0001_provider_settings.sql`
+2. `migrations/0002_chat_history.sql`
 
-1. Restore or implement the account/session API and validate the existing HttpOnly session cookie on every chat/settings request.
-2. Resolve provider/model preferences for the authenticated user on the server; ignore provider selection sent in a chat payload.
-3. Store each provider API key in Supabase Vault. Store only the Vault secret UUID in `luna_provider_settings`.
-4. Read decrypted Vault values only on the trusted server using a server-only credential. Never expose service-role keys or decrypted Vault data to the browser.
-5. Add per-user rate limits, request-size limits, upstream timeouts, and safe error mapping.
-6. Implement SSE/stream normalization for both upstream APIs and preserve the exact plain-text streaming contract expected by the existing Leptos client.
-7. Add integration tests against a disposable Supabase project before deploying.
+Do not apply these migrations to an unrelated Supabase project.
 
-Provider adapter models must be explicit and validated against the provider's current supported model list. Do not infer paid entitlements from the old three-option UI.
+## Provider configuration status
+
+The chat endpoint currently reads a provider key from the server environment and supports Groq or Gemini. This is an interim server-only bridge, not the final agreed configuration. The next security step is to add authenticated provider settings endpoints backed by Supabase Vault, then remove environment-key fallback. No provider key is returned to the browser.
+
+## Important limitations
+
+- Access tokens are short-lived; refresh-token rotation is not implemented yet.
+- Chat responses are returned as text bodies; token-by-token SSE streaming is not implemented.
+- Provider settings UI and Vault secret management are not yet connected.
+- Run CI and integration tests before deployment. No migration has been applied remotely by this change.
