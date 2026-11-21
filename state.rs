@@ -61,7 +61,7 @@ pub struct Me {
     #[serde(default)]
     pub plan: usize,
     #[serde(default)]
-    pub channel_member: bool,
+    pub channel_member: Option<bool>,
     #[serde(default = "default_prompt_limit")]
     pub prompt_limit: usize,
 }
@@ -357,7 +357,9 @@ impl Ctx {
                     self.me.update(|current| {
                         if let Some(me) = current {
                             me.plan = verified_plan;
-                            me.channel_member = result.channel_member;
+                            if let Some(channel_member) = result.channel_member {
+                                me.channel_member = channel_member;
+                            }
                             me.prompt_limit = result.prompt_limit;
                         }
                     });

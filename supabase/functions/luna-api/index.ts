@@ -527,9 +527,10 @@ Deno.serve(async (req: Request) => {
       if (subscription.error || !subscription.verified) {
         return text(503, "Не удалось проверить доступ к тарифу. Попробуйте позже.");
       }
-      const channelMember = rawPlan > 0
-        ? subscription.member
-        : (await isLunaChannelMember(admin, updatedUserData.user)) === true;
+      // Choosing the free plan does not change Telegram membership.
+      // Keep the client's last verified membership instead of adding a slow
+      // Telegram round trip or replacing a known true value with an outage false.
+      const channelMember = rawPlan > 0 ? subscription.member : null;
       const effectiveUser = {
         ...updatedUserData.user,
         app_metadata: {
