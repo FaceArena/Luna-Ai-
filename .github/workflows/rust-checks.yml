@@ -22,8 +22,10 @@ jobs:
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Check Supabase Edge Function
-        run: deno check --node-modules-dir=auto supabase/functions/luna-api/index.ts
+      - name: Check Supabase Edge Functions
+        run: |
+          deno check --node-modules-dir=auto supabase/functions/luna-api/index.ts
+          deno check --node-modules-dir=auto supabase/functions/luna-ai/index.ts
       - name: Install Trunk
         uses: taiki-e/install-action@v2
         with:
