@@ -14,6 +14,83 @@ use crate::{providers::{self, ChatMessage, Provider, ProviderConfig}, AppState};
 const SESSION_COOKIE: &str = "luna_session";
 
 #[derive(Deserialize)]
+struct SupabaseUser {
+    id: String,
+    email: Option<String>,
+    #[serde(default)]
+    user_metadata: Value,
+}
+
+#[derive(Deserialize)]
+struct AuthResult {
+    access_token: Option<String>,
+    user: Option<SupabaseUser>,
+}
+
+#[derive(Serialize)]
+pub struct Me {
+    name: String,
+    email: String,
+    plan: usize,
+}
+
+fn me(user: SupabaseUser) -> Me {
+    let name = ["name", "full_name", "preferred_username", "username", "given_name"]
+        .iter()
+        .find_map(|key| user.user_metadata.get(*key).and_then(Value::as_str))
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("Пользователь Telegram")
+        .chars()
+        .take(40)
+        .collect::<String>();
+    let plan = user.user_metadata.get("plan")
+        .and_then(Value::as_u64)
+        .unwrap_or(0)
+        .min(2) as usize;
+    Me { name, email: user.email.unwrap_or_default(), plan }
+}
+
+fn cookie_token(headers: &HeaderMap) -> Option<String> {
+    headers.get(header::COOKIE)?.to_str().ok()?
+        .split(';')
+        .filter_map(|part| part.trim().split_once('='))
+        .find(|(key, _)| *key == SESSION_COOKIE)
+        .map(|(_, value)| value.to_owned())
+}
+
+fn set_session_cookie(token: &str) -> HeaderValue {
+    HeaderValue::from_str(&format!(
+        "{SESSION_COOKIE}={token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=3600"
+    )).unwrap()
+}
+
+fn clear_session_cookie() -> HeaderValue {
+    HeaderValue::from_static("luna_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0")
+}
+
+fn error(status: StatusCode, message: &'static str) -> Response {
+    (status, [(header::CONTENT_TYPE, "text/plain; charset=utf-8")], message).into_response()
+}
+
+async fn auth_user(state: &AppState, token: &str) -> Result<SupabaseUser, Response> {
+    let response = state.http
+        .get(format!("{}/auth/v1/user", state.supabase_url))
+        .header("apikey", state.supabase_anon_key.as_ref())
+        .bearer_auth(token)
+        .send().await
+        .map_err(|_| error(StatusCode::BAD_GATEWAY, "Не удалось проверить сессию"))?;
+
+    if response.status() == StatusCode::UNAUTHORIZED {
+        return Err(error(StatusCode::UNAUTHORIZED, "Сессия закончилась. Войдите снова."));
+    }
+    if !response.status().is_success() {
+        return Err(error(StatusCode::BAD_GATEWAY, "Ошибка проверки аккаунта"));
+    }
+    response.json::<SupabaseUser>().await
+        .map_err(|_| error(StatusCode::BAD_GATEWAY, "Некорректный ответ сервиса аккаунтов"))
+}
+
+#[derive(Deserialize)]
 pub struct TelegramExchangeInput {
     auth_code: String,
     code_verifier: String,
