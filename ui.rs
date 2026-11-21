@@ -139,22 +139,35 @@ fn globals(ctx: Ctx) {
         let _ = r.class_list().toggle_with_force("paused", document().hidden());
     });
 
-    // iOS Safari: синхронизируем только геометрию видимой области.
-    // Не трогаем scrollTop ленты во время resize/scroll: Safari сам управляет
-    // прокруткой при показе клавиатуры, а повторная коррекция вызывала скачки
-    // и визуальное сжатие всего чата.
+    // iOS Safari: синхронизируем геометрию видимой области и сохраняем позицию ленты.
     if let Some(vv) = window().visual_viewport() {
         let update_viewport = {
             let root = root.clone();
             let vv = vv.clone();
             move || {
+                // Запомнить, был ли чат прижат к низу до коррекции высоты.
+                let was_at_bottom = document().get_element_by_id("log").map_or(true, |el| {
+                    el.scroll_height() - el.scroll_top() - el.client_height() <= 80
+                });
+
                 let height = vv.height().max(1.0);
                 let offset_top = vv.offset_top().max(0.0);
                 let _ = root.style().set_property("--vvh", &format!("{height}px"));
                 let _ = root.style().set_property("--vvt", &format!("{offset_top}px"));
+
                 let layout_h = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(height);
-                let keyboard_open = height < layout_h - 120.0;
+                let input_focused = document().active_element().map_or(false, |el| el.id() == "inp");
+                let keyboard_open = input_focused || height < layout_h - 120.0;
                 let _ = root.class_list().toggle_with_force("keyboard-open", keyboard_open);
+
+                // После смены высоты вернуть чат к низу только если он был там.
+                if was_at_bottom {
+                    request_animation_frame(move || {
+                        if let Some(el) = document().get_element_by_id("log") {
+                            el.set_scroll_top(el.scroll_height());
+                        }
+                    });
+                }
             }
         };
         update_viewport();
