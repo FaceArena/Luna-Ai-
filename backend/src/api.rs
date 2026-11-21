@@ -7,6 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::time::{Duration, Instant};
 
 use crate::{providers::{self, ChatMessage, Provider, ProviderConfig}, AppState};
 
@@ -294,10 +295,21 @@ pub async fn chat(
     headers: HeaderMap,
     Json(input): Json<ChatInput>,
 ) -> Response {
-    let (token, user) = match token_and_user(&state, &headers).await {
+    let (_token, user) = match token_and_user(&state, &headers).await {
         Ok(value) => value, Err(response) => return response,
     };
-    let _ = (token, user);
+    {
+        let now = Instant::now();
+        let Ok(mut limits) = state.chat_requests.lock() else {
+            return error(StatusCode::SERVICE_UNAVAILABLE, "Сервис временно недоступен.");
+        };
+        let requests = limits.entry(user.id).or_default();
+        requests.retain(|at| now.duration_since(*at) < Duration::from_secs(60));
+        if requests.len() >= 12 {
+            return error(StatusCode::TOO_MANY_REQUESTS, "Слишком много сообщений. Подождите минуту.");
+        }
+        requests.push(now);
+    }
     if input.msgs.is_empty() || input.msgs.len() > 20
         || input.msgs.iter().any(|m| m.content.len() > 16_000 || !["user","assistant"].contains(&m.role.as_str())) {
         return error(StatusCode::BAD_REQUEST, "Слишком длинный запрос или некорректная история.");
