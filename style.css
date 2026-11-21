@@ -711,3 +711,74 @@ html, body {
 @media(prefers-reduced-motion:reduce){.lab-panel{animation:none!important}}
 
 .lab-heading .lab-ready{color:#8fe0bd}
+
+/* Luna Laboratory: accessible controls and phone-first layout refinements. */
+.lab-tabs{position:sticky;top:0;z-index:6;scroll-behavior:smooth;scroll-snap-type:x proximity;overscroll-behavior-x:contain}
+.lab-tabs button{scroll-snap-align:start;min-height:44px}
+.lab-tabs button:focus-visible,.lab-mini:focus-visible,.lab-remove:focus-visible,.lab-state:focus-visible,.lab-action:focus-visible{
+  outline:2px solid color-mix(in srgb,var(--c) 88%,white);outline-offset:2px
+}
+.lab-panel{min-width:0;overflow-wrap:anywhere}
+.lab-heading{flex-wrap:wrap}
+.lab-heading>span{max-width:55%;text-align:right;overflow-wrap:anywhere}
+.lab-item{min-width:0}
+.lab-item-copy{overflow-wrap:anywhere}
+.lab-mini{min-height:40px;font-size:12px}
+.lab-mini:disabled{opacity:.42;cursor:not-allowed}
+.lab-remove{width:40px;height:40px;display:grid;place-items:center;font-size:22px}
+.lab-state{
+  position:relative;width:44px;height:44px;display:grid;place-items:center;
+  padding:0;border:0;border-radius:14px;background:transparent;flex:none
+}
+.lab-state::before{
+  content:"";position:absolute;width:38px;height:22px;border-radius:99px;
+  background:var(--glass2);transition:background .2s
+}
+.lab-state span{position:relative;z-index:1;width:16px;height:16px;margin-right:16px;border-radius:50%;background:var(--fg2);transition:transform .25s var(--spring),background .2s}
+.lab-state.on::before{background:color-mix(in srgb,var(--b) 70%,var(--glass2))}
+.lab-state.on span{transform:translateX(16px);background:#fff}
+.lab-info-row{min-width:0}
+.lab-info-row span{min-width:0;flex:1;overflow-wrap:anywhere}
+.lab-info-row b{min-width:0;max-width:60%;overflow-wrap:anywhere}
+.lab-action{min-height:50px}
+.lab-panel .fi{min-width:0;min-height:48px}
+.lab-panel textarea.fi{min-height:132px}
+.lab-tabs button[aria-selected="true"]{color:var(--fg)}
+@media(max-width:520px){
+  .lab-sc{padding:4px 12px calc(env(safe-area-inset-bottom,0px) + 28px)}
+  .lab-intro{gap:12px;padding:8px 2px 14px}
+  .lab-mark{width:48px;height:48px;border-radius:16px}
+  .lab-mark .rb{width:34px;height:34px}
+  .lab-intro b{font-size:17px}
+  .lab-intro p{font-size:12px;line-height:1.45}
+  .lab-tabs{margin:0 -12px 12px;padding:6px 12px;border-radius:0 0 18px 18px;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+  .lab-tabs button{min-height:44px;padding:0 15px;font-size:13px}
+  .lab-panel{padding:15px 12px 16px;border-radius:22px}
+  .lab-heading>b{font-size:15px}
+  .lab-panel .hint{font-size:12px;line-height:1.5;margin:8px 1px 12px}
+  .lab-panel .fl{font-size:13px;margin-top:16px}
+  .lab-panel .fi{padding:13px 14px;border-radius:17px}
+  .lab-action{margin-top:14px}
+  .lab-list{gap:8px;margin-top:14px}
+  .lab-item{gap:7px;padding:8px 6px 8px 9px;border-radius:16px}
+  .lab-item-copy b{font-size:13px}
+  .lab-item-copy span,.lab-item-copy small{font-size:11px}
+  .lab-mini{min-height:44px;padding:0 10px;border-radius:14px;font-size:12px}
+  .lab-remove{width:40px;height:40px}
+  .lab-info-row{align-items:flex-start;gap:8px;padding:12px 1px;font-size:12px}
+  .lab-info-row b{max-width:58%;font-size:11px;line-height:1.45}
+}
+@media(max-width:360px){
+  .lab-sc{padding-left:10px;padding-right:10px}
+  .lab-tabs{margin-left:-10px;margin-right:-10px;padding-left:10px;padding-right:10px}
+  .lab-panel{padding-left:10px;padding-right:10px}
+  .lab-item{gap:5px;padding-left:7px;padding-right:5px}
+  .lab-mini{padding:0 8px;font-size:11px}
+  .lab-info-row{flex-direction:column;gap:3px}
+  .lab-info-row b{max-width:100%;text-align:left;font-size:12px}
+}
+@media(prefers-reduced-motion:reduce){
+  .lab-tabs{scroll-behavior:auto}
+}
+/* Keep the switch hit area transparent; only the inset track changes state. */
+.lab-state.on{background:transparent}
