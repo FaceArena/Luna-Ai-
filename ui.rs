@@ -805,16 +805,16 @@ fn PageLab() -> impl IntoView {
                         <p>"Персонажи, знания и стиль ответа — в одном месте."</p>
                     </div>
                 </div>
-                <div class="lab-tabs" role="tablist" aria-label="Инструменты Luna">
-                    <button type="button" role="tab" aria-controls="lab-panel" aria-selected=move || tab.get() == "personas" tabindex=move || if tab.get() == "personas" { "0" } else { "-1" } class:on=move || tab.get() == "personas" on:click=move |_| tab.set("personas".into())>"Персоны"</button>
-                    <button type="button" role="tab" aria-controls="lab-panel" aria-selected=move || tab.get() == "lore" tabindex=move || if tab.get() == "lore" { "0" } else { "-1" } class:on=move || tab.get() == "lore" on:click=move |_| tab.set("lore".into())>"Лорбуки"</button>
-                    <button type="button" role="tab" aria-controls="lab-panel" aria-selected=move || tab.get() == "presets" tabindex=move || if tab.get() == "presets" { "0" } else { "-1" } class:on=move || tab.get() == "presets" on:click=move |_| tab.set("presets".into())>"Пресеты"</button>
-                    <button type="button" role="tab" aria-controls="lab-panel" aria-selected=move || tab.get() == "vectors" tabindex=move || if tab.get() == "vectors" { "0" } else { "-1" } class:on=move || tab.get() == "vectors" on:click=move |_| tab.set("vectors".into())>"Embeddings"</button>
-                    <button type="button" role="tab" aria-controls="lab-panel" aria-selected=move || tab.get() == "plugins" tabindex=move || if tab.get() == "plugins" { "0" } else { "-1" } class:on=move || tab.get() == "plugins" on:click=move |_| tab.set("plugins".into())>"Плагины"</button>
+                <div class="lab-tabs" role="group" aria-label="Разделы лаборатории">
+                    <button type="button" aria-pressed=move || tab.get() == "personas" class:on=move || tab.get() == "personas" on:click=move |_| tab.set("personas".into())>"Персоны"</button>
+                    <button type="button" aria-pressed=move || tab.get() == "lore" class:on=move || tab.get() == "lore" on:click=move |_| tab.set("lore".into())>"Лорбуки"</button>
+                    <button type="button" aria-pressed=move || tab.get() == "presets" class:on=move || tab.get() == "presets" on:click=move |_| tab.set("presets".into())>"Пресеты"</button>
+                    <button type="button" aria-pressed=move || tab.get() == "vectors" class:on=move || tab.get() == "vectors" on:click=move |_| tab.set("vectors".into())>"Embeddings"</button>
+                    <button type="button" aria-pressed=move || tab.get() == "plugins" class:on=move || tab.get() == "plugins" on:click=move |_| tab.set("plugins".into())>"Плагины"</button>
                 </div>
                 {move || match tab.get().as_str() {
                     "personas" => view! {
-                        <div class="lab-panel" id="lab-panel" role="tabpanel" aria-live="polite">
+                        <div class="lab-panel" id="lab-panel" aria-live="polite">
                             <div class="lab-heading"><b>"Персоны"</b><span>{move || format!("{} сохранено", ctx.cfg.get().lab.personas.len())}</span></div>
                             <p class="hint">"Сохрани текущую личность Luna как отдельную персону. Применение заменит активное имя и инструкции, но не удалит сохранённые профили."</p>
                             <label class="fl" for="lab-persona-name">"Название новой персоны"</label>
