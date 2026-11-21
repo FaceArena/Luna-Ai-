@@ -749,19 +749,41 @@ fn PageDoc() -> impl IntoView {
 
 // ───────────── лента сообщений ─────────────
 
-fn row_view(ctx: Ctx, r: Row) -> View {
+fn row_view(ctx: Ctx, r: Row, anim: RwSignal<Option<usize>>, last_ai_id: Memo<Option<u64>>) -> View {
     if r.user {
         return view! { <div class="msg me">{r.text}</div> }.into_view();
     }
     let k = ctx.mi.get_untracked();
     if r.fx == 0 {
-        return view! { <div class="msg ai"><div class="glass av">{rb(k)}</div><div class="tx">{r.text}</div></div> }.into_view();
+        let id = r.id;
+        return view! {
+            <div class="msg ai">
+                <div class="glass av">
+                    <svg viewBox="0 0 100 100"
+                         class=move || if last_ai_id.get() == Some(id) {
+                             match anim.get() { Some(a) => format!("rb a{a}"), None => "rb".to_string() }
+                         } else { "rb".to_string() }
+                         prop:innerHTML=move || if last_ai_id.get() == Some(id) {
+                             data().rb[ctx.mi.get()].clone()
+                         } else { data().rb[k].clone() }></svg>
+                </div>
+                <div class="tx">{r.text}</div>
+            </div>
+        }.into_view();
     }
     let art = if r.fx == 1 { data().rb_stop.clone() } else { data().rb_lim.clone() };
     let plan = data().models[k].n.clone();
     view! {
         <div class="msg ai">
-            <div class="glass av">{rb(k)}</div>
+            <div class="glass av">
+                <svg viewBox="0 0 100 100"
+                     class=move || if last_ai_id.get() == Some(r.id) {
+                         match anim.get() { Some(a) => format!("rb a{a}"), None => "rb".to_string() }
+                     } else { "rb".to_string() }
+                     prop:innerHTML=move || if last_ai_id.get() == Some(r.id) {
+                         data().rb[ctx.mi.get()].clone()
+                     } else { data().rb[k].clone() }></svg>
+            </div>
             <div class="tx">
                 <div class="rep">
                     {(!r.part.is_empty()).then(|| view! { <div>{r.part.clone()}</div> })}
@@ -801,6 +823,7 @@ fn Log() -> impl IntoView {
     let streaming = create_memo(move |_| ctx.stream.with(|s| s.is_some()));
     let blank = create_memo(move |_| ctx.stream.with(|s| s.as_ref().map_or(true, |t| t.is_empty())));
     let empty = create_memo(move |_| ctx.log.with(|l| l.is_empty()) && !streaming.get());
+    let last_ai_id = create_memo(move |_| ctx.log.with(|l| l.iter().rev().find(|r| !r.user).map(|r| r.id)));
     let log_el = ctx.log_el;
 
     view! {
@@ -819,7 +842,7 @@ fn Log() -> impl IntoView {
                     <p>"Разговоры, истории и ролевые игры в одном месте."</p>
                 </div>
             </Show>
-            <For each=move || ctx.log.get() key=|r| r.id children=move |r| row_view(ctx, r)/>
+            <For each=move || ctx.log.get() key=|r| r.id children=move |r| row_view(ctx, r, anim, last_ai_id)/>
             <Show when=move || streaming.get()>
                 <div class="msg ai">
                     <div class="glass av">{move || rb(ctx.mi.get())}</div>
