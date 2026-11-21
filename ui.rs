@@ -596,6 +596,20 @@ fn PageProviders() -> impl IntoView {
         model.set(if value == "gemini" { "gemini-2.5-flash" } else { "llama-3.3-70b-versatile" }.into());
         configured.set(false);
         status.set(String::new());
+        spawn_local(async move {
+            if let Ok(resp) = Request::get("/api/provider-settings").send().await {
+                if resp.ok() {
+                    if let Ok(data) = resp.json::<serde_json::Value>().await {
+                        if let Some(rows) = data.get("providers").and_then(|v| v.as_array()) {
+                            if let Some(row) = rows.iter().find(|row| row.get("provider").and_then(|v| v.as_str()) == Some(value.as_str())) {
+                                model.set(row.get("model").and_then(|v| v.as_str()).unwrap_or(if value == "gemini" { "gemini-2.5-flash" } else { "llama-3.3-70b-versatile" }).to_string());
+                                configured.set(row.get("configured").and_then(|v| v.as_bool()).unwrap_or(false));
+                            }
+                        }
+                    }
+                }
+            }
+        });
     };
 
     let save_provider = move |_| {
