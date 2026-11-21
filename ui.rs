@@ -865,6 +865,21 @@ fn Log() -> impl IntoView {
             show_jump.set(true);
         }
     });
+    let resize_cb = Closure::<dyn FnMut(js_sys::Array, web_sys::ResizeObserver)>::new(move |_, _| {
+        if near_bottom.get_untracked() {
+            scroll_bottom(true);
+        }
+    });
+    if let Ok(observer) = web_sys::ResizeObserver::new(resize_cb.as_ref().unchecked_ref()) {
+        let observer_ref = observer.clone();
+        request_animation_frame(move || {
+            if let Some(content) = document().get_element_by_id("messages-content") {
+                let _ = observer_ref.observe(&content);
+            }
+        });
+        resize_cb.forget();
+        observer.forget();
+    }
 
     view! {
         <main id="log" node_ref=log_el
@@ -891,6 +906,7 @@ fn Log() -> impl IntoView {
                       show_jump.set(!at_bottom);
                   }
               }>
+            <div id="messages-content">
             <Show when=move || empty_visible.get()>
                 <div class="empty" class:leaving=move || empty_leaving.get()>
                     <div class="glass big hey" on:click=move |_| {
@@ -919,6 +935,7 @@ fn Log() -> impl IntoView {
                     </div>
                 </div>
             </Show>
+            </div>
             <button class="jump glass" class:visible=move || show_jump.get()
                     aria-label="К последнему сообщению"
                     on:click=move |_| { near_bottom.set(true); show_jump.set(false); scroll_bottom(true); }>
