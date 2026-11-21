@@ -915,11 +915,13 @@ fn PageDoc() -> impl IntoView {
                 move || ctx.open_page(ctx.doc_from.get_untracked()))}
             <div class="sc">
                 {move || data().docs.get(&ctx.doc.get()).map(|d| view! {
-                    <div class="prof">
-                        {rb(ctx.mi.get_untracked())}
-                        <div><b>{d.t.clone()}</b><span>{format!("Редакция от {}", data().lg_date)}</span></div>
+                    <div class="grp doc">
+                        <div class="doc-head">
+                            {rb(ctx.mi.get_untracked())}
+                            <div><b>{d.t.clone()}</b><span>{format!("Редакция от {}", data().lg_date)}</span></div>
+                        </div>
+                        <div class="doc-content">{d.s.iter().map(|(h, t)| view! { <section class="doc-section"><b>{h.clone()}</b><p>{t.clone()}</p></section> }).collect_view()}</div>
                     </div>
-                    <div class="grp doc">{d.s.iter().map(|(h, t)| view! { <section class="doc-section"><b>{h.clone()}</b><p>{t.clone()}</p></section> }).collect_view()}</div>
                 }.into_view())}
             </div>
         </section>
