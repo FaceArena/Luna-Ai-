@@ -254,6 +254,10 @@ impl Ctx {
         let r = root.clone();
         create_effect(move |_| {
             let c = self.cfg.get();
+            if c.theme == "auto" {
+                self.cfg.update(|cfg| cfg.theme = "dark".into());
+                return;
+            }
             match c.theme.as_str() {
                 // "auto" из старых сохранённых настроек мигрирует в тёмную тему.
                 "auto" | "dark" => {
