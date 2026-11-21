@@ -543,8 +543,13 @@ impl Ctx {
             let mut stream = wasm_streams::ReadableStream::from_raw(raw.unchecked_into()).into_stream();
             let mut buf: Vec<u8> = Vec::new();
             let mut shown = 0usize;
-            let mut first_chunk = true;
             const CHUNKS: [usize; 6] = [3, 4, 2, 5, 4, 6];
+
+            // Start the typing phase one second after the reply bubble appears.
+            gloo_timers::future::TimeoutFuture::new(1000).await;
+            if self.run.get_value() != my {
+                return;
+            }
 
             while let Some(chunk) = stream.next().await {
                 if self.run.get_value() != my {
@@ -552,14 +557,6 @@ impl Ctx {
                 }
                 let Ok(v) = chunk else { break };
                 buf.extend(js_sys::Uint8Array::new(&v).to_vec());
-
-                if first_chunk {
-                    first_chunk = false;
-                    gloo_timers::future::TimeoutFuture::new(1000).await;
-                    if self.run.get_value() != my {
-                        return;
-                    }
-                }
 
                 let full = clean(&String::from_utf8_lossy(&buf));
                 let chars: Vec<char> = full.chars().collect();
