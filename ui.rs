@@ -139,28 +139,31 @@ fn globals(ctx: Ctx) {
         let _ = r.class_list().toggle_with_force("paused", document().hidden());
     });
 
-    // iOS Safari: синхронизируем геометрию видимой области и сохраняем позицию ленты.
+    // iOS Safari: track the visual viewport only while the keyboard is open.
     if let Some(vv) = window().visual_viewport() {
-        let update_viewport = {
+        let update: std::rc::Rc<dyn Fn()> = std::rc::Rc::new({
             let root = root.clone();
             let vv = vv.clone();
             move || {
-                // Запомнить, был ли чат прижат к низу до коррекции высоты.
                 let was_at_bottom = document().get_element_by_id("log").map_or(true, |el| {
                     el.scroll_height() - el.scroll_top() - el.client_height() <= 80
                 });
-
                 let height = vv.height().max(1.0);
                 let offset_top = vv.offset_top().max(0.0);
-                let _ = root.style().set_property("--vvh", &format!("{height}px"));
-                let _ = root.style().set_property("--vvt", &format!("{offset_top}px"));
-
                 let layout_h = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(height);
                 let input_focused = document().active_element().map_or(false, |el| el.id() == "inp");
-                let keyboard_open = input_focused || height < layout_h - 120.0;
+                let keyboard_open = input_focused && height < layout_h - 80.0;
+
+                let st = root.style();
+                if keyboard_open {
+                    let _ = st.set_property("--vvh", &format!("{height}px"));
+                    let _ = st.set_property("--vvt", &format!("{offset_top}px"));
+                } else {
+                    let _ = st.remove_property("--vvh");
+                    let _ = st.remove_property("--vvt");
+                }
                 let _ = root.class_list().toggle_with_force("keyboard-open", keyboard_open);
 
-                // После смены высоты вернуть чат к низу только если он был там.
                 if was_at_bottom {
                     request_animation_frame(move || {
                         if let Some(el) = document().get_element_by_id("log") {
@@ -169,12 +172,43 @@ fn globals(ctx: Ctx) {
                     });
                 }
             }
-        };
-        update_viewport();
-        let fit = Closure::<dyn FnMut()>::new(update_viewport);
+        });
+        update();
+        let fit = Closure::<dyn FnMut()>::new({
+            let u = update.clone();
+            move || u()
+        });
         let _ = vv.add_event_listener_with_callback("resize", fit.as_ref().unchecked_ref());
         let _ = vv.add_event_listener_with_callback("scroll", fit.as_ref().unchecked_ref());
         fit.forget();
+
+        // iOS may omit the final viewport resize when the keyboard closes.
+        let resync = {
+            let u = update.clone();
+            move || {
+                let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
+                for ms in [60u64, 300, 700] {
+                    let u = u.clone();
+                    set_timeout(move || u(), Duration::from_millis(ms));
+                }
+            }
+        };
+        window_event_listener(ev::focusout, {
+            let r = resync.clone();
+            move |_| r()
+        });
+        window_event_listener(ev::pageshow, {
+            let r = resync.clone();
+            move |_| r()
+        });
+        window_event_listener(ev::visibilitychange, {
+            let r = resync.clone();
+            move |_| r()
+        });
+        window_event_listener(ev::orientationchange, {
+            let r = resync.clone();
+            move |_| r()
+        });
     } else {
         let h = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(1.0).max(1.0);
         let _ = root.style().set_property("--vvh", &format!("{h}px"));
