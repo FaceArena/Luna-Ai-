@@ -49,7 +49,11 @@ fn me(user: SupabaseUser) -> Me {
         .filter(|s| !s.trim().is_empty())
         .unwrap_or("Luna user")
         .to_owned();
-    Me { name, email: user.email.unwrap_or_default(), plan: 0 }
+    let plan = user.user_metadata.get("plan")
+        .and_then(Value::as_u64)
+        .unwrap_or(0)
+        .min(2) as usize;
+    Me { name, email: user.email.unwrap_or_default(), plan }
 }
 
 fn cookie_token(headers: &HeaderMap) -> Option<String> {
@@ -351,6 +355,29 @@ pub async fn chat(
     }
 }
 
-pub async fn plan() -> Response {
-    error(StatusCode::FORBIDDEN, "Тариф нельзя менять через клиентский запрос.")
+#[derive(Deserialize)]
+pub struct PlanInput {
+    plan: usize,
+}
+
+pub async fn plan(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<PlanInput>,
+) -> Response {
+    let (token, _) = match token_and_user(&state, &headers).await {
+        Ok(value) => value, Err(response) => return response,
+    };
+    let plan = input.plan.min(2);
+    let response = match state.http
+        .patch(format!("{}/auth/v1/user", state.supabase_url))
+        .header("apikey", &state.supabase_anon_key)
+        .bearer_auth(token)
+        .json(&json!({"data":{"plan":plan}}))
+        .send().await {
+            Ok(response) => response,
+            Err(_) => return error(StatusCode::BAD_GATEWAY, "Не удалось сохранить выбор тарифа."),
+        };
+    if response.status().is_success() { StatusCode::NO_CONTENT.into_response() }
+    else { error(StatusCode::BAD_GATEWAY, "Не удалось сохранить выбор тарифа.") }
 }
