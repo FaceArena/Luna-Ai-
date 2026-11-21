@@ -23,9 +23,18 @@ export default {
       try {
         const upstream = await fetch(target, init);
         const responseHeaders = new Headers();
-        for (const name of ["content-type", "cache-control", "set-cookie"]) {
+        for (const name of ["content-type", "cache-control"]) {
           const value = upstream.headers.get(name);
           if (value) responseHeaders.set(name, value);
+        }
+        // Set-Cookie is a multi-value header. Preserve each cookie explicitly
+        // when proxying Supabase responses through the Worker.
+        const cookies = typeof upstream.headers.getSetCookie === "function"
+          ? upstream.headers.getSetCookie()
+          : [upstream.headers.get("set-cookie")].filter(Boolean);
+        for (const cookie of cookies) responseHeaders.append("Set-Cookie", cookie);
+        if (incoming.pathname === "/api/auth/telegram/exchange") {
+          responseHeaders.set("Cache-Control", "no-store");
         }
         const body = request.method === "HEAD" || upstream.status === 204 ? null : upstream.body;
         return new Response(body, { status: upstream.status, headers: responseHeaders });
