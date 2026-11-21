@@ -885,14 +885,13 @@ fn Log() -> impl IntoView {
         }
     });
     let observer = new_resize_observer(resize_cb.as_ref().unchecked_ref());
-    let observer_ref = observer;
     request_animation_frame(move || {
         if let Some(content) = document().get_element_by_id("messages-content") {
-            observe_resize(&observer_ref, &content);
+            observe_resize(&observer, &content);
         }
+        std::mem::forget(observer);
     });
     resize_cb.forget();
-    std::mem::forget(observer_ref);
 
     view! {
         <main id="log" node_ref=log_el
