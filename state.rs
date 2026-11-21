@@ -571,9 +571,7 @@ impl Ctx {
                     let visible: String = chars[..shown].iter().collect();
                     self.stream.set(Some(visible));
                     self.scroll(false);
-                    if shown < chars.len() {
-                        gloo_timers::future::TimeoutFuture::new(100).await;
-                    }
+                    gloo_timers::future::TimeoutFuture::new(100).await;
                 }
             }
             if self.run.get_value() != my {
