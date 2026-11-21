@@ -134,11 +134,19 @@ async function isLunaChannelMember(admin: any, user: any): Promise<boolean> {
   const telegramIdentity = identities.find((identity: any) =>
     identity?.provider === "custom:telegram" || identity?.provider === "telegram"
   );
-  const telegramId = String(telegramIdentity?.identity_data?.sub ?? "");
-  if (!/^\d{5,20}$/.test(telegramId)) {
-    console.warn("luna membership denied: trusted Telegram identity missing or malformed", {
+  // Telegram OIDC "sub" is an opaque OIDC subject, NOT the Bot API user id.
+  // The numeric Bot API id is exposed as the "id" claim with the profile scope
+  // and is copied into identity_data.custom_claims by Supabase's allowlist.
+  const telegramId = String(
+    telegramIdentity?.identity_data?.custom_claims?.id ??
+    telegramIdentity?.identity_data?.id ??
+    ""
+  ).trim();
+  const telegramUserId = Number(telegramId);
+  if (!/^\d{1,16}$/.test(telegramId) || !Number.isSafeInteger(telegramUserId) || telegramUserId <= 0) {
+    console.warn("luna membership denied: trusted Telegram Bot API id missing or malformed", {
       identityProviders: identities.map((identity: any) => identity?.provider).filter(Boolean),
-      hasSubject: Boolean(telegramIdentity?.identity_data?.sub),
+      hasBotApiId: Boolean(telegramIdentity?.identity_data?.custom_claims?.id ?? telegramIdentity?.identity_data?.id),
     });
     return false;
   }
@@ -152,7 +160,7 @@ async function isLunaChannelMember(admin: any, user: any): Promise<boolean> {
     const response = await fetch(`https://api.telegram.org/bot${botToken}/getChatMember`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: "@LunaAiroll", user_id: Number(telegramId) }),
+      body: JSON.stringify({ chat_id: "@LunaAiroll", user_id: telegramUserId }),
       signal: AbortSignal.timeout(5000),
     });
     const payload = await response.json().catch(() => null);
