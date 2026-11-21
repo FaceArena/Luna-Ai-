@@ -572,7 +572,11 @@ fn PageAi() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     let prompt_words = move || {
         let cfg = ctx.cfg.get();
-        cfg.who.split_whitespace().count() + cfg.rules.split_whitespace().count()
+        let preset_words = cfg.lab.active_preset.as_ref()
+            .and_then(|id| cfg.lab.presets.iter().find(|preset| &preset.id == id))
+            .map(|preset| preset.instructions.split_whitespace().count())
+            .unwrap_or(0);
+        cfg.who.split_whitespace().count() + cfg.rules.split_whitespace().count() + preset_words
     };
     let prompt_limit = move || ctx.me.get().map(|m| m.prompt_limit).unwrap_or(100);
     let prompt_over = move || prompt_words() > prompt_limit();
