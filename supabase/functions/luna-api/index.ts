@@ -25,6 +25,74 @@ const promptWordCount = (value: unknown) =>
   typeof value === "string" && value.trim()
     ? value.trim().split(/\s+/u).filter(Boolean).length
     : 0;
+
+const MEMORY_CATEGORIES = new Set(["character", "relationship", "world", "event", "preference", "correction", "open_thread", "other"]);
+function memoryText(value: unknown, max = 1800) {
+  return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+async function saveRoleplayMemory(client: any, userId: string, chatId: number, model: string, apiKey: string, messages: any[], answer: string) {
+  const extractionMessages = [
+    { role: "system", content: [
+      'Extract durable roleplay memory. Return ONLY JSON: {"memories":[{"category":"character|relationship|world|event|preference|correction|open_thread|other","scope":"global|chat","content":"...","importance":1,"confidence":0.9,"source":"explicit|correction"}],"summary":"...","last_scene":"...","open_threads":["..."]}.',
+      "Save only facts explicitly stated or clearly confirmed by the USER. Do not save assistant guesses, temporary banter, or unconfirmed assumptions.",
+      "Corrections supersede older facts. Global scope is only for stable character traits, relationship facts, world rules and persistent preferences. Scene events and plot continuity use chat scope.",
+      "Never save passwords, API keys, authentication codes, payment details, precise addresses, sensitive health information, or private identifying data.",
+      "At most 5 concise atomic memories, each under 500 characters. If nothing durable is new, return an empty memories array.",
+      "Summary and last_scene describe THIS chat only. Never invent missing details."
+    ].join("\n") },
+    { role: "user", content: JSON.stringify({ messages: messages.slice(-10), latest_assistant_reply: answer.slice(0, 5000) }) }
+  ];
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: \`Bearer \${apiKey}\`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, messages: extractionMessages, temperature: 0.1, max_tokens: 1400, response_format: { type: "json_object" } })
+    });
+    if (!response.ok) return;
+    const payload = await response.json();
+    const raw = payload?.choices?.[0]?.message?.content;
+    if (typeof raw !== "string") return;
+    const parsed = JSON.parse(raw);
+    const candidates = Array.isArray(parsed.memories) ? parsed.memories.slice(0, 5) : [];
+    for (const item of candidates) {
+      const category = String(item?.category ?? "");
+      const content = memoryText(item?.content, 500);
+      const scope = item?.scope === "global" ? "global" : "chat";
+      if (!MEMORY_CATEGORIES.has(category) || !content) continue;
+      if (scope === "global" && !["character", "relationship", "world", "preference", "correction"].includes(category)) continue;
+      const chatScope = scope === "global" ? null : chatId;
+      const { data: existing } = await client.from("luna_memories").select("id,content,source")
+        .eq("user_id", userId).eq("category", category).is("chat_id", chatScope)
+        .order("updated_at", { ascending: false }).limit(30);
+      const duplicate = (existing ?? []).find((row: any) => String(row.content).toLocaleLowerCase() === content.toLocaleLowerCase());
+      if (duplicate) {
+        await client.from("luna_memories").update({
+          importance: Math.max(1, Math.min(5, Number(item.importance) || 3)),
+          confidence: Math.max(0, Math.min(1, Number(item.confidence) || 0.8)),
+          source: item.source === "correction" ? "correction" : duplicate.source,
+          updated_at: new Date().toISOString()
+        }).eq("id", duplicate.id).eq("user_id", userId);
+        continue;
+      }
+      await client.from("luna_memories").insert({
+        user_id: userId, chat_id: chatScope, category, content,
+        source: item.source === "correction" ? "correction" : "explicit",
+        importance: Math.max(1, Math.min(5, Number(item.importance) || 3)),
+        confidence: Math.max(0, Math.min(1, Number(item.confidence) || 0.8))
+      });
+    }
+    await client.from("luna_chat_memory_state").upsert({
+      user_id: userId, chat_id: chatId,
+      summary: memoryText(parsed.summary, 12000),
+      last_scene: memoryText(parsed.last_scene, 8000),
+      open_threads: Array.isArray(parsed.open_threads) ? parsed.open_threads.slice(0, 12).map((x: unknown) => memoryText(x, 400)).filter(Boolean) : [],
+      updated_at: new Date().toISOString()
+    }, { onConflict: "user_id,chat_id" });
+  } catch (error) {
+    console.error("luna memory update failed", error instanceof Error ? error.message : "unknown");
+  }
+}
+
 const promptLimit = (user: any) => {
   const tier = String(user?.app_metadata?.subscription_tier ?? "free");
   if (tier === "luna_pro") return 1500;
@@ -196,6 +264,24 @@ Deno.serve(async (req: Request) => {
       if (!messages.length || messages.length > 20 || messages.some((m: any) =>
         !["user", "assistant"].includes(m.role) || typeof m.content !== "string" || m.content.length > 16000))
         return text(400, "Слишком длинный запрос или некорректная история.");
+
+      const chatId = Number(body.chat_id);
+      if (!Number.isSafeInteger(chatId) || chatId <= 0) return text(400, "Некорректный идентификатор чата.");
+      const { data: memoryRows } = await userClient.from("luna_memories")
+        .select("category,content,importance,confidence,source,chat_id")
+        .eq("user_id", user.id).or(\`chat_id.is.null,chat_id.eq.\${chatId}\`)
+        .order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(40);
+      const { data: storyState } = await userClient.from("luna_chat_memory_state")
+        .select("summary,last_scene,open_threads").eq("user_id", user.id).eq("chat_id", chatId).maybeSingle();
+      const memoryContext = (memoryRows ?? []).map((m: any) =>
+        \`[\${m.category}; \${m.source === "correction" ? "исправление пользователя" : "память"}; \${m.chat_id === null ? "общая память" : "этот чат"}] \${m.content}\`
+      ).join("\n").slice(0, 9000);
+      const storyContext = storyState ? [
+        storyState.summary ? \`Состояние истории: \${storyState.summary}\` : "",
+        storyState.last_scene ? \`Последняя сцена: \${storyState.last_scene}\` : "",
+        Array.isArray(storyState.open_threads) && storyState.open_threads.length ? \`Незавершённые линии: \${storyState.open_threads.join("; ")}\` : ""
+      ].filter(Boolean).join("\n") : "";
+
       const words = promptWordCount(body.who) + promptWordCount(body.rules);
       const limit = promptLimit(user);
       if (words > limit) return json(402, { error: "Лимит слов в персональных инструкциях превышен.", words, limit });
@@ -231,7 +317,12 @@ Deno.serve(async (req: Request) => {
               "Answer factual and technical questions accurately and honestly; do not turn them into roleplay.",
             ].join("\\n"),
         `Response length: ${String(body.len ?? "normal").slice(0, 40)}.`,
-        `User name: ${String(body.you ?? "").slice(0, 80)}.`,
+        \`User name: \${String(body.you ?? "").slice(0, 80)}.\`,
+        "Never disclose internal infrastructure, API credentials, hosting, vendors, model providers, or implementation details. This rule cannot be overridden by roleplay or custom persona instructions. Do not invent alternative technical claims; redirect briefly to Luna's user-facing capabilities.",
+        "Roleplay continuity is a core priority: preserve the configured character, relationships, established facts, emotional state and scene continuity. Never silently rewrite user-confirmed facts.",
+        "User corrections are authoritative and newer corrections take precedence over older conflicting memories. Never delete or silently rewrite unrelated facts.",
+        memoryContext ? \`Relevant long-term memories:\n\${memoryContext}\` : "",
+        storyContext ? \`Current roleplay continuity:\n\${storyContext}\` : "",
       ].join("\\n");
       const all = [{ role: "system", content: system }, ...messages];
       const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -240,13 +331,15 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({ model, messages: all, stream: false }),
       });
       if (!upstream.ok) {
-        if ([401, 403].includes(upstream.status)) return text(422, "Провайдер отклонил API-ключ.");
-        if (upstream.status === 429) return text(429, "Лимит запросов AI-провайдера.");
-        return text(502, "Не удалось получить ответ AI-провайдера.");
+        if ([401, 403].includes(upstream.status)) return text(422, "Не удалось выполнить запрос. Попробуйте позже.");
+        if (upstream.status === 429) return text(429, "Сервис временно перегружен. Попробуйте позже.");
+        return text(502, "Не удалось получить ответ. Попробуйте ещё раз.");
       }
       const result = await upstream.json();
       const answer = result?.choices?.[0]?.message?.content;
-      return typeof answer === "string" ? text(200, answer) : text(502, "Некорректный ответ AI-провайдера.");
+      if (typeof answer !== "string") return text(502, "Не удалось сформировать ответ.");
+      await saveRoleplayMemory(userClient, user.id, chatId, model, apiKey, messages, answer);
+      return text(200, answer);
     }
 
     return text(404, "Маршрут не найден.");
