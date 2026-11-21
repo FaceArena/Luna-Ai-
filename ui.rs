@@ -872,7 +872,7 @@ fn Log() -> impl IntoView {
               on:pointerup=move |e: web_sys::PointerEvent| {
                   if e.client_y() as f64 - touch_start_y.get_value() > 55.0 {
                       if let Some(active) = document().get_element_by_id("inp").and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok()) {
-                          active.blur();
+                          let _ = active.blur();
                       }
                   }
               }
