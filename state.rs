@@ -229,11 +229,7 @@ impl Ctx {
                         ls_set("luna-cfg", &serde_json::to_string(&c).unwrap_or_default());
                         if self.cfg_sync.get_untracked() && self.me.get_untracked().is_some() {
                             let cfg = c.clone();
-                            let limit = self.me.get_untracked().map(|m| m.prompt_limit).unwrap_or(100);
-                            let words = cfg.who.split_whitespace().count() + cfg.rules.split_whitespace().count();
-                            if words <= limit {
-                                spawn_local(async move { let _ = api::put_personal_settings(&cfg).await; });
-                            }
+                            spawn_local(async move { let _ = api::put_personal_settings(&cfg).await; });
                         }
                     }
                 },
