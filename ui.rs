@@ -872,9 +872,7 @@ fn PageAbout() -> impl IntoView {
         <section class=pgc(ctx, Page::About)>
             {ph(ctx, || "О приложении".into(), move || ctx.open_page(Page::Main))}
             <div class="sc about-sc">
-                <div class="about-hero">
-                    <div class="about-orbit"></div>
-                    <div class="about-mascot">{rb(ctx.mi.get())}</div>
+                <div class="about-intro">
                     <span class="about-eyebrow">"LUNA AI · О ПРОЕКТЕ"</span>
                     <h2>"Место для общения и историй"</h2>
                     <p>"Придумывайте персонажей, развивайте сюжеты и ведите собственные диалоги."</p>
