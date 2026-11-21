@@ -160,6 +160,9 @@ fn globals(ctx: Ctx) {
             move || {
                 let _ = root.style().set_property("--vvh", &format!("{}px", vv.height()));
                 let _ = root.style().set_property("--vvt", &format!("{}px", vv.offset_top()));
+                let layout_h = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(vv.height());
+                let keyboard_open = vv.height() < layout_h - 120.0;
+                let _ = root.class_list().toggle_with_force("keyboard-open", keyboard_open);
                 if window().scroll_y().unwrap_or(0.0) != 0.0 {
                     window().scroll_to_with_x_and_y(0.0, 0.0);
                 }
@@ -171,7 +174,8 @@ fn globals(ctx: Ctx) {
         let _ = vv.add_event_listener_with_callback("scroll", fit.as_ref().unchecked_ref());
         fit.forget();
     } else {
-        let _ = root.style().set_property("--vvh", "100vh");
+        let h = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let _ = root.style().set_property("--vvh", &format!("{}px", h));
         let _ = root.style().set_property("--vvt", "0px");
     }
 }
