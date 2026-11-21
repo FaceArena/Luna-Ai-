@@ -253,19 +253,25 @@ fn ModelPop() -> impl IntoView {
     let held = create_rw_signal(false);
     let ly = create_rw_signal(6.0f64);
 
+    create_effect(move |_| {
+        ctx.model_preview.set(ctx.mi.get());
+    });
+
     let mv = move |e: web_sys::PointerEvent| {
         if let Some(el) = msh_ref.get_untracked() {
             let y = e.client_y() as f64 - el.get_bounding_client_rect().top();
             ly.set((y - 29.0).clamp(6.0, 6.0 + 2.0 * 62.0));
             let i = (((y - 6.0) / 62.0).floor().max(0.0) as usize).min(2);
-            if i != ctx.mi.get_untracked() {
-                ctx.set_model(i);
-            }
+            ctx.model_preview.set(i);
         }
     };
     let rel = move |_: web_sys::PointerEvent| {
         if held.get_untracked() {
             held.set(false);
+            let selected = ctx.model_preview.get_untracked();
+            if selected != ctx.mi.get_untracked() {
+                ctx.set_model(selected);
+            }
             set_timeout(move || ctx.msh_open.set(false), Duration::from_millis(480));
         }
     };
@@ -281,17 +287,19 @@ fn ModelPop() -> impl IntoView {
              on:pointermove=move |e: web_sys::PointerEvent| { if held.get_untracked() { mv(e) } }
              on:pointerup=rel on:pointercancel=rel>
             {data().models.iter().enumerate().map(|(k, m)| view! {
-                <div class="mc" class:pro=m.pro class:sel=move || ctx.mi.get() == k>
+                <div class="mc" class:pro=m.pro class:sel=move || ctx.model_preview.get() == k>
                     <div class="glass ic">{rb(k)}</div>
                     <div class="mt"><b>{m.n.clone()}</b><span>{m.d.clone()}</span></div>
-                    {if m.pro {
+                    {if m.pro && !ctx.me.get().map(|me| me.channel_member).unwrap_or(false) {
                         view! { <svg class="lk" viewBox="0 0 24 24" inner_html=LOCK></svg> }.into_view()
-                    } else {
+                    } else if !m.pro {
                         view! { <em>"авто"</em> }.into_view()
+                    } else {
+                        ().into_view()
                     }}
                 </div>
             }).collect_view()}
-            <div class="mlens" style:top=move || format!("{}px", if held.get() { ly.get() } else { 6.0 + ctx.mi.get() as f64 * 62.0 })></div>
+            <div class="mlens" style:top=move || format!("{}px", if held.get() { ly.get() } else { 6.0 + ctx.model_preview.get() as f64 * 62.0 })></div>
         </div>
     }
 }
@@ -700,7 +708,7 @@ fn PagePlan() -> impl IntoView {
                                     view! { <span>"Текущий тариф"</span> }.into_view()
                                 } else {
                                     view! {
-                                        {pro.then(|| view! { <svg class="lk" viewBox="0 0 24 24" inner_html=LOCK></svg> })}
+                                        {(pro && !ctx.me.get().map(|me| me.channel_member).unwrap_or(false)).then(|| view! { <svg class="lk" viewBox="0 0 24 24" inner_html=LOCK></svg> })}
                                         <span>"Выбрать"</span>
                                     }.into_view()
                                 }}

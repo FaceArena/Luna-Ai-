@@ -369,12 +369,14 @@ Deno.serve(async (req: Request) => {
     if (method === "GET" && path === "/api/me") {
       const subscription = await resolveSubscription(admin, user);
       if (subscription.error) return text(503, "Не удалось проверить доступ к тарифу. Попробуйте позже.");
+      const channelMember = await isLunaChannelMember(admin, user);
       const effectiveUser = { ...user, app_metadata: { ...(user.app_metadata ?? {}), subscription_tier: subscription.tier } };
       return json(200, {
         id: user.id,
         name: String(user.user_metadata?.name ?? user.user_metadata?.full_name ?? user.user_metadata?.preferred_username ?? user.user_metadata?.username ?? user.user_metadata?.given_name ?? "Пользователь Telegram").trim().slice(0, 40) || "Пользователь Telegram",
         email: user.email ?? "",
         plan: subscription.plan,
+        channel_member: channelMember,
         prompt_limit: promptLimit(effectiveUser),
       });
     }

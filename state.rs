@@ -60,6 +60,8 @@ pub struct Me {
     pub email: String,
     #[serde(default)]
     pub plan: usize,
+    #[serde(default)]
+    pub channel_member: bool,
     #[serde(default = "default_prompt_limit")]
     pub prompt_limit: usize,
 }
@@ -138,6 +140,7 @@ pub struct Ctx {
     pub cfg_sync: RwSignal<bool>,
     pub pal: RwSignal<usize>,
     pub mi: RwSignal<usize>,
+    pub model_preview: RwSignal<usize>,
     pub busy: RwSignal<bool>,
     pub me: RwSignal<Option<Me>>,
     pub chats: RwSignal<Vec<Chat>>,
@@ -171,6 +174,7 @@ impl Ctx {
             cfg_sync: create_rw_signal(false),
             pal: create_rw_signal(pal),
             mi: create_rw_signal(mi),
+            model_preview: create_rw_signal(mi),
             busy: create_rw_signal(false),
             me: create_rw_signal(None),
             chats: create_rw_signal(vec![]),
@@ -310,16 +314,19 @@ impl Ctx {
             match api::set_plan(i).await {
                 Ok(()) => {
                     self.mi.set(i);
+                    self.model_preview.set(i);
                     ls_set("luna-model2", &i.to_string());
                     self.me.update(|m| {
                         if let Some(m) = m {
                             m.plan = i;
+                            if i > 0 { m.channel_member = true; }
                         }
                     });
                     self.say("Тариф успешно изменён.");
                 }
                 Err(message) => {
                     self.mi.set(previous);
+                    self.model_preview.set(previous);
                     let notice = if message.contains("403") || message.contains("подпишитесь") {
                         "Премиум доступен только подписчикам Telegram-канала Luna AI."
                     } else {
@@ -359,6 +366,7 @@ impl Ctx {
 
     pub fn finish_login(self, me: Me) {
         self.mi.set(me.plan.min(2));
+        self.model_preview.set(me.plan.min(2));
         ls_set("luna-model2", &self.mi.get_untracked().to_string());
         self.cfg_sync.set(false);
         self.me.set(Some(me.clone()));
@@ -389,6 +397,7 @@ impl Ctx {
         spawn_local(api::logout());
         self.cfg_sync.set(false);
         self.mi.set(0);
+        self.model_preview.set(0);
         ls_set("luna-model2", "0");
         self.me.set(None);
         self.cfg.set(Cfg::default());
