@@ -47,7 +47,7 @@ Deno.serve(async (req: Request) => {
       const email = typeof body.email === "string" ? body.email.trim() : "";
       const password = typeof body.pass === "string" ? body.pass : "";
       const name = typeof body.name === "string" ? body.name.trim().slice(0, 40) : "";
-      const validEmail = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);
+      const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
       if (!validEmail || email.length > 254 || password.length < 8 || password.length > 128 || !name)
         return text(400, "Проверьте имя, адрес почты и пароль (8–128 символов).");
       const client = createClient(base, anon, { auth: { persistSession: false, autoRefreshToken: false } });
