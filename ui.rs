@@ -678,7 +678,7 @@ fn PageProviders() -> impl IntoView {
                     on:change=move |e| model.set(event_target_value(&e))>
                     <Show when=move || provider.get() == "groq">
                         <option value="openai/gpt-oss-120b">"GPT OSS 120B"</option>
-                        <option value="openai/gpt-oss-120b">"GPT OSS 120B"</option>
+                        <option value="openai/gpt-oss-20b">"GPT OSS 20B"</option>
                     </Show>
                     <Show when=move || provider.get() == "gemini">
                         <option value="gemini-2.5-flash">"Gemini 2.5 Flash"</option>
