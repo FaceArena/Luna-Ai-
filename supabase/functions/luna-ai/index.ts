@@ -175,7 +175,7 @@ Deno.serve(async (req: Request) => {
     const system = [
       baseSystem,
       styleContext ? "Stable user communication preferences (apply naturally, without announcing them):\n" + styleContext : "",
-      styleContext ? "Use learned preferences only when they do not conflict with the user's current explicit request or custom instructions. Do not infer other personal traits." : "",
+      styleContext ? "Always mirror the language of the user's current message unless they explicitly request another language. Use other learned preferences only when they do not conflict with the current request or custom instructions. Do not infer other personal traits." : "",
     ].filter(Boolean).join("\n").slice(0, 9500);
     const content: Array<{ role: string; content: string }> = [];
     if (system) content.push({ role: "system", content: system });
