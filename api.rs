@@ -1,4 +1,4 @@
-use crate::state::{Chat, Cfg, Me};
+use crate::state::{Chat, Cfg, Me, Memory};
 use gloo_net::http::Request;
 
 pub async fn me() -> Option<Me> {
@@ -24,6 +24,24 @@ pub async fn put_personal_settings(cfg: &Cfg) -> bool {
 
 pub async fn logout() {
     let _ = Request::post("/api/logout").send().await;
+}
+
+
+pub async fn memories() -> Result<Vec<Memory>, ()> {
+    let response = Request::get("/api/memories").send().await.map_err(|_| ())?;
+    if !response.ok() { return Err(()); }
+    response.json().await.map_err(|_| ())
+}
+
+pub async fn update_memory(id: &str, memory: &serde_json::Value) -> Result<Memory, ()> {
+    let response = Request::put(&format!("/api/memories/{id}"))
+        .json(memory).map_err(|_| ())?.send().await.map_err(|_| ())?;
+    if !response.ok() { return Err(()); }
+    response.json().await.map_err(|_| ())
+}
+
+pub async fn delete_memory(id: &str) -> bool {
+    Request::delete(&format!("/api/memories/{id}")).send().await.map(|r| r.ok()).unwrap_or(false)
 }
 
 pub async fn chats() -> Vec<Chat> {
