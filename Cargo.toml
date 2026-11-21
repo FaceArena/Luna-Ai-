@@ -23,7 +23,7 @@ web-sys = { version = "0.3", features = [
   "HtmlInputElement", "HtmlTextAreaElement", "HtmlAnchorElement",
   "PointerEvent", "DomRect", "AbortController", "AbortSignal", "ReadableStream",
   "CssStyleDeclaration", "DeviceOrientationEvent", "MediaQueryList",
-  "VisualViewport", "ResizeObserver", "FocusOptions", "ScrollToOptions", "ScrollBehavior", "DomTokenList", "KeyboardEvent", "SubmitEvent",
+  "VisualViewport", "FocusOptions", "ScrollToOptions", "ScrollBehavior", "DomTokenList", "KeyboardEvent", "SubmitEvent",
 ] }
 
 [profile.release]
