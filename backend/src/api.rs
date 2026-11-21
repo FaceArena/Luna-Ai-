@@ -178,7 +178,18 @@ pub async fn current_user(
     }
 }
 
-pub async fn logout() -> Response {
+pub async fn logout(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Response {
+    if let Some(token) = cookie_token(&headers) {
+        let _ = state.http
+            .post(format!("{}/auth/v1/logout", state.supabase_url))
+            .header("apikey", state.supabase_anon_key.as_ref())
+            .bearer_auth(token)
+            .send()
+            .await;
+    }
     let mut response = StatusCode::NO_CONTENT.into_response();
     response.headers_mut().insert(header::SET_COOKIE, clear_session_cookie());
     response
@@ -307,8 +318,11 @@ pub async fn chat(
         let Ok(mut limits) = state.chat_requests.lock() else {
             return error(StatusCode::SERVICE_UNAVAILABLE, "Сервис временно недоступен.");
         };
+        limits.retain(|_, requests| {
+            requests.retain(|at| now.duration_since(*at) < Duration::from_secs(60));
+            !requests.is_empty()
+        });
         let requests = limits.entry(user.id).or_default();
-        requests.retain(|at| now.duration_since(*at) < Duration::from_secs(60));
         if requests.len() >= 12 {
             return error(StatusCode::TOO_MANY_REQUESTS, "Слишком много сообщений. Подождите минуту.");
         }
