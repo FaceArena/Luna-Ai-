@@ -821,8 +821,25 @@ fn Log() -> impl IntoView {
     let streaming = create_memo(move |_| ctx.stream.with(|s| s.is_some()));
     let blank = create_memo(move |_| ctx.stream.with(|s| s.as_ref().map_or(true, |t| t.is_empty())));
     let empty = create_memo(move |_| ctx.log.with(|l| l.is_empty()) && !streaming.get());
+    let empty_visible = create_rw_signal(ctx.log.get_untracked().is_empty());
+    let empty_leaving = create_rw_signal(false);
+    create_effect(move |_| {
+        if empty.get() {
+            empty_visible.set(true);
+            empty_leaving.set(false);
+        } else if empty_visible.get_untracked() {
+            empty_leaving.set(true);
+            set_timeout(move || {
+                if !empty.get_untracked() {
+                    empty_visible.set(false);
+                    empty_leaving.set(false);
+                }
+            }, Duration::from_millis(260));
+        }
+    });
     let last_ai_id = create_memo(move |_| ctx.log.with(|l| l.iter().rev().find(|r| !r.user).map(|r| r.id)));
     let log_el = ctx.log_el;
+    let touch_start_y = store_value(0.0f64);
     let near_bottom = create_rw_signal(true);
     let show_jump = create_rw_signal(false);
     let scroll_bottom = move |smooth: bool| {
@@ -848,6 +865,21 @@ fn Log() -> impl IntoView {
 
     view! {
         <main id="log" node_ref=log_el
+              on:pointerdown=move |e: web_sys::PointerEvent| touch_start_y.set_value(e.client_y() as f64)
+              on:pointerup=move |e: web_sys::PointerEvent| {
+                  if e.client_y() as f64 - touch_start_y.get_value() > 55.0 {
+                      if let Some(active) = document().get_element_by_id("inp").and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok()) {
+                          active.blur();
+                      }
+                  }
+              }
+              on:click=move |_| {
+                  if document().document_element().map_or(false, |el| el.class_list().contains("keyboard-open")) {
+                      if let Some(active) = document().get_element_by_id("inp").and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok()) {
+                          active.blur();
+                      }
+                  }
+              }
               on:scroll=move |_| {
                   if let Some(el) = log_el.get_untracked() {
                       let distance = el.scroll_height() - el.scroll_top() - el.client_height();
@@ -856,8 +888,8 @@ fn Log() -> impl IntoView {
                       show_jump.set(!at_bottom);
                   }
               }>
-            <Show when=move || empty.get()>
-                <div class="empty">
+            <Show when=move || empty_visible.get()>
+                <div class="empty" class:leaving=move || empty_leaving.get()>
                     <div class="glass big hey" on:click=move |_| {
                         anim.set(Some(ctx.mi.get_untracked()));
                         set_timeout(move || anim.set(None), Duration::from_millis(1100));
