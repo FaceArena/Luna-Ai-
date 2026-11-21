@@ -545,6 +545,12 @@ fn PageMain() -> impl IntoView {
 #[component]
 fn PageAi() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
+    let prompt_words = move || {
+        let cfg = ctx.cfg.get();
+        cfg.who.split_whitespace().count() + cfg.rules.split_whitespace().count()
+    };
+    let prompt_limit = move || ctx.me.get().map(|m| m.prompt_limit).unwrap_or(100);
+    let prompt_over = move || prompt_words() > prompt_limit();
     view! {
         <section class=pgc(ctx, Page::Ai)>
             {ph(ctx, || "Персональный ИИ".into(), move || ctx.open_page(Page::Main))}
@@ -560,13 +566,22 @@ fn PageAi() -> impl IntoView {
                 <input class="fi" id="f-name" maxlength="40" placeholder="Luna" autocomplete="off"
                        prop:value=move || ctx.cfg.get().name on:input=move |e| ctx.cfg.update(|c| c.name = event_target_value(&e))/>
                 <label class="fl" for="f-who">"Кто он"</label>
-                <textarea class="fi" id="f-who" maxlength="1200"
+                <textarea class="fi" id="f-who" maxlength="12000"
                           placeholder="Например: лунный кролик-астроном. Живёт на обратной стороне Луны, любит звёзды, говорит тепло и с лёгкой иронией."
                           prop:value=move || ctx.cfg.get().who on:input=move |e| ctx.cfg.update(|c| c.who = event_target_value(&e))></textarea>
                 <label class="fl" for="f-rules">"Как он должен себя вести"</label>
-                <textarea class="fi" id="f-rules" maxlength="1500"
+                <textarea class="fi" id="f-rules" maxlength="18000"
                           placeholder="Например: отвечай коротко, не читай мораль, оставайся в образе, задавай встречные вопросы."
                           prop:value=move || ctx.cfg.get().rules on:input=move |e| ctx.cfg.update(|c| c.rules = event_target_value(&e))></textarea>
+                <p class="hint">{move || format!("Инструкции: {} / {} слов", prompt_words(), prompt_limit())}</p>
+                {move || if prompt_over() {
+                    view! {
+                        <div class="grp lim">
+                            <p>"Вы превысили лимит бесплатной версии. Сократите инструкции или посмотрите платные тарифы с большим лимитом."</p>
+                            <button class="cta" type="button" on:click=move |_| ctx.open_page(Page::Plan)>"Посмотреть тарифы"</button>
+                        </div>
+                    }.into_view()
+                } else { ().into_view() }}
                 <div class="fl">"Длина ответов"</div>
                 <div class="seg">
                     {[("short", "Кратко"), ("normal", "Обычно"), ("long", "Подробно")].into_iter().map(|(k, t)| view! {
@@ -774,11 +789,15 @@ fn row_view(ctx: Ctx, r: Row, anim: RwSignal<Option<usize>>, last_ai_id: Memo<Op
                     {(!r.part.is_empty()).then(|| view! { <div>{r.part.clone()}</div> })}
                     <div class="glass big"><svg class="rb a1" viewBox="0 0 100 100" inner_html=art></svg></div>
                     <div>{r.text.clone()}</div>
-                    {(r.fx == 2).then(|| view! {
+                    {(r.fx == 2 || r.fx == 3).then(|| view! {
                         <div class="grp lim">
-                            <div class="row"><span class="rt">"Статус"</span><span class="rv">"Лимит превышен"</span></div>
-                            <div class="row"><span class="rt">"Тариф"</span><span class="rv">{plan.clone()}</span></div>
-                            <div class="row"><span class="rt">"Что делать"</span><span class="rv">"Подождать немного"</span></div>
+                            <div class="row"><span class="rt">"Статус"</span><span class="rv">{if r.fx == 3 { "Промт длиннее лимита" } else { "Лимит превышен" }}</span></div>
+                            <div class="row"><span class="rt">"Тариф"</span><span class="rv">{if r.fx == 3 { "Бесплатный" } else { plan.clone() }}</span></div>
+                            {if r.fx == 3 {
+                                view! { <button class="cta" type="button" on:click=move |_| ctx.open_page(Page::Plan)>"Посмотреть тарифы"</button> }.into_view()
+                            } else {
+                                view! { <div class="row"><span class="rt">"Что делать"</span><span class="rv">"Подождать немного"</span></div> }.into_view()
+                            }}
                         </div>
                     })}
                 </div>
