@@ -806,3 +806,31 @@ html, body {
 
 /* Make the applied preset state explicit, not color-only. */
 .lab-item .lab-mini[aria-pressed="true"]{min-width:88px;font-weight:650}
+
+
+/* Locked Laboratory — a deliberate coming-soon state. */
+.lab-locked{display:grid;place-items:center;min-height:100%;padding:28px 20px calc(env(safe-area-inset-bottom,0px) + 34px)}
+.lab-locked-content{width:min(100%,360px);display:flex;flex-direction:column;align-items:center;text-align:center;padding:30px 22px 34px;border-radius:30px;background:var(--glass);box-shadow:inset 0 1px 0 var(--edge),0 18px 48px -28px var(--shadow)}
+.lab-lock-icon{width:54px;height:54px;display:grid;place-items:center;border-radius:19px;background:var(--glass2);box-shadow:inset 0 1px 0 var(--edge);color:var(--fg)}
+.lab-lock-icon svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.lab-coming-mascot{width:54px;height:54px;display:grid;place-items:center;margin:16px 0 8px}
+.lab-coming-mascot .rb{width:48px;height:48px;overflow:visible}
+.lab-coming-mascot .wv{transform-box:fill-box;transform-origin:50% 100%;animation:wave 1s ease-in-out infinite}
+.lab-coming-label{margin-top:8px;font-size:10px;font-weight:700;letter-spacing:.2em;color:var(--fg2)}
+.lab-locked-content h2{margin:9px 0 6px;font-size:19px;line-height:1.25;font-weight:600;letter-spacing:-.025em}
+.lab-locked-content p{max-width:270px;margin:0;color:var(--fg2);font-size:13px;line-height:1.55}
+
+/* Pure black theme: no blue ambient glow or tinted surfaces. */
+:root[data-theme="black"]{
+  --bg:#000;--fg:#f5f5f5;--fg2:rgba(245,245,245,.58);
+  --glass:rgba(255,255,255,.045);--glass2:rgba(255,255,255,.085);
+  --edge:rgba(255,255,255,.13);--shadow:rgba(0,0,0,.9);
+  color-scheme:dark;
+}
+:root[data-theme="black"] body{background:#000}
+:root[data-theme="black"] .bg i,:root[data-theme="black"] .spot{display:none}
+:root[data-theme="black"] .bg::after{background:linear-gradient(180deg,#000,#000)}
+:root[data-theme="black"] .glass{background-color:rgba(12,12,12,.82);box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 10px 30px -12px rgba(0,0,0,.95)}
+:root[data-theme="black"] .drawer.glass,:root[data-theme="black"] .sheet.glass{background:rgba(5,5,5,.98)}
+:root[data-theme="black"] .lab-locked-content{background:#090909;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 18px 48px -28px #000}
+:root[data-theme="black"] .lab-lock-icon{background:#111}
