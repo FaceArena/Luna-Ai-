@@ -235,9 +235,13 @@ async function resolveSubscription(admin: any, user: any, requestedPlan?: number
   }
 
   const currentTier = String(user?.app_metadata?.subscription_tier ?? "free");
-  if (currentTier !== tier) {
+  const storedPlan = Number(user?.user_metadata?.plan ?? 0);
+  // Persist a confirmed unsubscribe in both metadata locations. Updating only
+  // app_metadata left user_metadata.plan paid, so later reads could resurrect it.
+  if (currentTier !== tier || storedPlan !== plan) {
     const { error } = await admin.auth.admin.updateUserById(user.id, {
       app_metadata: { ...(user.app_metadata ?? {}), subscription_tier: tier },
+      user_metadata: { ...(user.user_metadata ?? {}), plan },
     });
     if (error) {
       console.error("luna subscription sync failed", error.message);
