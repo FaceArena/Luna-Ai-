@@ -822,6 +822,7 @@ html, body {
 
 /* Pure black theme: no blue ambient glow or tinted surfaces. */
 :root[data-theme="black"]{
+  --a:#171717;--b:#353535;--c:#000;
   --bg:#000;--fg:#f5f5f5;--fg2:rgba(245,245,245,.58);
   --glass:rgba(255,255,255,.045);--glass2:rgba(255,255,255,.085);
   --edge:rgba(255,255,255,.13);--shadow:rgba(0,0,0,.9);
