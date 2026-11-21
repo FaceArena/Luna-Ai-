@@ -198,7 +198,7 @@ fn Header() -> impl IntoView {
                 <b><em>{move || name(ctx)}</em>" "<svg viewBox="0 0 24 24" inner_html=DOWN></svg></b>
                 <span>{move || if ctx.busy.get() { "Печатает".to_string() } else { model_name(ctx) }}</span>
             </button>
-            <button class="glass chg" aria-label=move || if ctx.me.get().is_some() { "Сменить тариф" } else { "Войти через Telegram" } on:click=move |_| { if ctx.me.get().is_some() { ctx.open_sheet(Page::Plan) } else { ctx.open_sheet(Page::Acc) } }>{move || if ctx.me.get().is_some() { "Сменить" } else { "Войти" }}</button>
+            <button class="glass chg" aria-label=move || if ctx.me.get().is_some() { "О приложении" } else { "Войти через Telegram" } on:click=move |_| { if ctx.me.get().is_some() { ctx.open_sheet(Page::About) } else { ctx.open_sheet(Page::Acc) } }>{move || if ctx.me.get().is_some() { "О приложении" } else { "Войти" }}</button>
             <button class="glass ib" id="palb" aria-label="Цвета" on:click=move |_| { ctx.msh_open.set(false); ctx.pal_open.update(|v| *v = !*v) }>
                 <span class="orb"></span>
             </button>
@@ -871,15 +871,38 @@ fn PageAbout() -> impl IntoView {
     view! {
         <section class=pgc(ctx, Page::About)>
             {ph(ctx, || "О приложении".into(), move || ctx.open_page(Page::Main))}
-            <div class="sc">
-                <div class="grp doc">
-                    <b>"О Luna AI"</b>
-                    <p>"Luna AI — приложение для общения, историй и ролевых игр. Здесь можно придумывать персонажей, развивать сюжеты и вести собственные диалоги."</p>
-                    <p>"Luna — мой самостоятельный авторский проект. Я развиваю его один, используя AI-инструменты и подход, который называют вайб-кодингом: превращаю идеи в работающие функции и постепенно улучшаю приложение."</p>
-                    <p>"Проект продолжает развиваться, поэтому в нём могут встречаться ошибки, недоработки и временные сбои. Я стараюсь исправлять проблемы и делать Luna лучше, но не хочу обещать безупречную работу там, где её нельзя гарантировать."</p>
+            <div class="sc about-sc">
+                <div class="about-hero">
+                    <div class="about-orbit"></div>
+                    <div class="about-mascot">{rb(ctx.mi.get())}</div>
+                    <span class="about-eyebrow">"LUNA AI · О ПРОЕКТЕ"</span>
+                    <h2>"Место для общения и историй"</h2>
+                    <p>"Придумывайте персонажей, развивайте сюжеты и ведите собственные диалоги."</p>
+                </div>
+                <div class="about-card">
+                    <div class="about-card-icon">{ic("info")}</div>
+                    <div>
+                        <b>"Что такое Luna AI"</b>
+                        <p>"Luna AI — приложение для общения, историй и ролевых игр. Здесь можно придумывать персонажей, развивать сюжеты и вести собственные диалоги."</p>
+                    </div>
+                </div>
+                <div class="about-card">
+                    <div class="about-card-icon">{ic("ai")}</div>
+                    <div>
+                        <b>"Авторский проект"</b>
+                        <p>"Luna — мой самостоятельный авторский проект. Я развиваю его один, используя AI-инструменты и подход, который называют вайб-кодингом: превращаю идеи в работающие функции и постепенно улучшаю приложение."</p>
+                    </div>
+                </div>
+                <div class="about-note">
+                    <div class="about-note-head"><span class="about-note-dot"></span><b>"Проект развивается"</b></div>
+                    <p>"В приложении могут встречаться ошибки, недоработки и временные сбои. Я стараюсь исправлять проблемы и делать Luna лучше, но не обещаю безупречную работу там, где её нельзя гарантировать."</p>
+                </div>
+                <div class="about-support">
+                    <b>"Поддержать развитие Luna"</b>
                     <p>"Если вам близка Luna и вы хотите поддержать её развитие, буду рад вашей подписке на мой Telegram-канал."</p>
                     <a class="cta" href="https://t.me/LunaAiroll" target="_blank" rel="noopener noreferrer">"Подписаться на Telegram-канал"</a>
                 </div>
+                <div class="about-foot">"Luna AI"</div>
             </div>
         </section>
     }
