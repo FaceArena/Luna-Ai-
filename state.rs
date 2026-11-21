@@ -66,7 +66,7 @@ impl Default for Cfg {
             rules: String::new(),
             len: "normal".into(),
             you: String::new(),
-            theme: "auto".into(),
+            theme: "dark".into(),
             motion: true,
             fs: "m".into(),
             keep: true,
@@ -255,8 +255,9 @@ impl Ctx {
         create_effect(move |_| {
             let c = self.cfg.get();
             match c.theme.as_str() {
-                "auto" => {
-                    let _ = r.remove_attribute("data-theme");
+                // "auto" из старых сохранённых настроек мигрирует в тёмную тему.
+                "auto" | "dark" => {
+                    let _ = r.set_attribute("data-theme", "dark");
                 }
                 t => {
                     let _ = r.set_attribute("data-theme", t);
