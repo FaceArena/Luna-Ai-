@@ -558,7 +558,12 @@ impl Ctx {
                 let Ok(v) = chunk else { break };
                 buf.extend(js_sys::Uint8Array::new(&v).to_vec());
 
-                let full = clean(&String::from_utf8_lossy(&buf));
+                // Do not expose a replacement glyph when a UTF-8 character is split across network chunks.
+                let decoded = match std::str::from_utf8(&buf) {
+                    Ok(text) => text.to_string(),
+                    Err(error) => String::from_utf8_lossy(&buf[..error.valid_up_to()]).into_owned(),
+                };
+                let full = clean(&decoded);
                 let chars: Vec<char> = full.chars().collect();
                 while shown < chars.len() {
                     if self.run.get_value() != my {
