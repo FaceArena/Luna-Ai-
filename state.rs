@@ -320,9 +320,7 @@ impl Ctx {
                 }
                 Err(message) => {
                     self.mi.set(previous);
-                    let notice = if message.contains("409") || message.contains("Данные Telegram устарели") {
-                        "Обновите вход: выйдите из аккаунта и войдите через Telegram снова."
-                    } else if message.contains("403") || message.contains("подпишитесь") {
+                    let notice = if message.contains("403") || message.contains("подпишитесь") {
                         "Премиум доступен только подписчикам Telegram-канала Luna AI."
                     } else {
                         "Не удалось изменить тариф. Проверьте подключение и попробуйте снова."
