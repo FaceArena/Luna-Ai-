@@ -35,7 +35,7 @@ function communicationStyleKey(value: string) {
   return match?.[1]?.toLowerCase() ?? "";
 }
 function isValidCommunicationStylePreference(value: string) {
-  const match = /^Communication style\s*[—:-]\s*([a-z_]+)\s*:\s*([a-zа-яё -]{1,40})$/i.exec(value);
+  const match = /^Communication style\s*[—:-]\s*([a-z_]+)\s*:\s*([a-zа-яё _-]{1,40})$/i.exec(value);
   if (!match) return false;
   const key = match[1].toLowerCase();
   const preference = match[2].trim().toLowerCase();
