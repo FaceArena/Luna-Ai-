@@ -30,6 +30,19 @@ const MEMORY_CATEGORIES = new Set(["character", "relationship", "world", "event"
 function memoryText(value: unknown, max = 1800) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
+const INTERNAL_PROVIDER_PATTERNS = [
+  /\bgroq\b/i,
+  /api\.groq\.com/i,
+  /openai\/gpt-oss-120b/i,
+  /\bgpt-oss-120b\b/i,
+  /\bopenai\b/i,
+  /\bsupabase\b/i,
+  /\bcloudflare\b/i,
+];
+function protectPublicIdentity(answer: string) {
+  if (!INTERNAL_PROVIDER_PATTERNS.some((pattern) => pattern.test(answer))) return answer;
+  return "Я — Luna, твой персональный ИИ-компаньон. Моя внутренняя техническая реализация не является частью моей публичной личности. Давай продолжим наш разговор.";
+}
 async function saveRoleplayMemory(client: any, userId: string, chatId: number, keepChat: boolean, model: string, apiKey: string, messages: any[], answer: string) {
   const extractionMessages = [
     { role: "system", content: [
@@ -400,8 +413,9 @@ Deno.serve(async (req: Request) => {
       const result = await upstream.json();
       const answer = result?.choices?.[0]?.message?.content;
       if (typeof answer !== "string") return text(502, "Не удалось сформировать ответ.");
-      await saveRoleplayMemory(userClient, user.id, chatId, keepChat, model, apiKey, messages, answer);
-      return text(200, answer);
+      const publicAnswer = protectPublicIdentity(answer);
+      await saveRoleplayMemory(userClient, user.id, chatId, keepChat, model, apiKey, messages, publicAnswer);
+      return text(200, publicAnswer);
     }
 
     return text(404, "Маршрут не найден.");
