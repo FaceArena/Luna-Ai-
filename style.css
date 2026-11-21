@@ -130,7 +130,7 @@ header{position:relative;z-index:5;display:flex;align-items:center;gap:10px;padd
 .row .rv{color:var(--fg2);font-size:15px;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row select{position:absolute;inset:0;width:100%;height:100%;opacity:0;font-size:16px;cursor:pointer}
 .row.danger .rt{color:#ff7a7a}
-.tg{width:52px;height:32px;border-radius:16px;background:var(--glass2);position:relative;flex:none;transition:background .4s}
+.tg{width:52px;height:32px;border:0;padding:0;appearance:none;-webkit-appearance:none;color:inherit;border-radius:16px;background:var(--glass2);position:relative;flex:none;cursor:pointer;transition:background .4s}
 .tg::after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.35);transition:transform .5s var(--spring),width .25s}
 .row:active .tg::after{width:32px}
 .tg::before{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(135deg,var(--a),var(--b));opacity:0;transition:opacity .35s}
