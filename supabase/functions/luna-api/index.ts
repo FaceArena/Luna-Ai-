@@ -30,6 +30,97 @@ const MEMORY_CATEGORIES = new Set(["character", "relationship", "world", "event"
 function memoryText(value: unknown, max = 1800) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
+
+let gteSmallSession: any = null;
+async function generateKnowledgeEmbedding(value: string): Promise<number[]> {
+  if (!gteSmallSession) gteSmallSession = new Supabase.ai.Session("gte-small");
+  const output = await gteSmallSession.run(value.slice(0, 4000), {
+    mean_pool: true,
+    normalize: true,
+  });
+  const vector = Array.from(output as ArrayLike<number>).map(Number);
+  if (vector.length !== 384 || vector.some((n) => !Number.isFinite(n))) {
+    throw new Error("gte-small returned an invalid 384-dimensional embedding");
+  }
+  return vector;
+}
+
+async function upsertKnowledgeEmbedding(
+  admin: any,
+  userId: string,
+  sourceKind: "memory" | "lorebook",
+  sourceId: string,
+  title: string,
+  content: string,
+) {
+  const safeContent = memoryText(content, 4000);
+  if (!sourceId || !safeContent) return;
+  try {
+    const embedding = await generateKnowledgeEmbedding([title, safeContent].filter(Boolean).join("\n"));
+    const { error } = await admin.from("luna_knowledge_embeddings").upsert({
+      user_id: userId,
+      source_kind: sourceKind,
+      source_id: sourceId.slice(0, 80),
+      title: memoryText(title, 120),
+      content: safeContent,
+      embedding: JSON.stringify(embedding),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,source_kind,source_id" });
+    if (error) console.error("luna knowledge embedding upsert failed", error.message);
+  } catch (error) {
+    console.error("luna knowledge embedding generation failed", error instanceof Error ? error.message : "unknown");
+  }
+}
+
+async function syncLorebookEmbeddings(admin: any, userId: string, lab: any) {
+  const entries = Array.isArray(lab?.lorebooks) ? lab.lorebooks.slice(0, 20) : [];
+  const { data: existing, error } = await admin.from("luna_knowledge_embeddings")
+    .select("source_id,title,content").eq("user_id", userId).eq("source_kind", "lorebook");
+  if (error) {
+    console.error("luna lorebook embedding sync read failed", error.message);
+    return;
+  }
+  const activeIds = new Set<string>();
+  for (const entry of entries) {
+    const id = String(entry?.id ?? "").slice(0, 80);
+    const title = memoryText(entry?.name, 60);
+    const content = memoryText(entry?.content, 4000);
+    if (!id || !title || !content || entry?.enabled !== true) continue;
+    activeIds.add(id);
+    const previous = (existing ?? []).find((row: any) => row.source_id === id);
+    if (!previous || previous.title !== title || previous.content !== content) {
+      await upsertKnowledgeEmbedding(admin, userId, "lorebook", id, title, content);
+    }
+  }
+  for (const row of existing ?? []) {
+    if (!activeIds.has(String(row.source_id))) {
+      const { error: deleteError } = await admin.from("luna_knowledge_embeddings").delete()
+        .eq("user_id", userId).eq("source_kind", "lorebook").eq("source_id", row.source_id);
+      if (deleteError) console.error("luna lorebook embedding cleanup failed", deleteError.message);
+    }
+  }
+}
+
+async function ensureMemoryEmbeddings(admin: any, userId: string, memories: any[]) {
+  const rows = (Array.isArray(memories) ? memories : []).slice(0, 4);
+  const ids = rows.map((row) => String(row.id ?? "")).filter(Boolean);
+  if (!ids.length) return;
+  const { data: existing, error } = await admin.from("luna_knowledge_embeddings")
+    .select("source_id,title,content").eq("user_id", userId).eq("source_kind", "memory").in("source_id", ids);
+  if (error) {
+    console.error("luna memory embedding lookup failed", error.message);
+    return;
+  }
+  for (const row of rows) {
+    const id = String(row.id ?? "");
+    const title = String(row.category ?? "Память");
+    const content = memoryText(row.content, 4000);
+    const previous = (existing ?? []).find((item: any) => item.source_id === id);
+    if (!previous || previous.title !== title || previous.content !== content) {
+      await upsertKnowledgeEmbedding(admin, userId, "memory", id, title, content);
+    }
+  }
+}
 function communicationStyleKey(value: string) {
   const match = /^Communication style\s*[—:-]\s*([a-z_]+)\s*:/i.exec(value);
   return match?.[1]?.toLowerCase() ?? "";
@@ -473,7 +564,9 @@ Deno.serve(async (req: Request) => {
       const { error } = await userClient.from("luna_personal_settings").upsert({
         user_id: user.id, settings, updated_at: new Date().toISOString(),
       }, { onConflict: "user_id" });
-      return error ? text(502, "Не удалось сохранить персональные настройки.") : json(200, { ok: true });
+      if (error) return text(502, "Не удалось сохранить персональные настройки.");
+      await syncLorebookEmbeddings(admin, user.id, settings.lab);
+      return json(200, { ok: true });
     }
 
     if (path === "/api/memories" && method === "GET") {
@@ -510,6 +603,7 @@ Deno.serve(async (req: Request) => {
         .select("id,chat_id,category,content,source,importance,confidence,is_pinned,updated_at").maybeSingle();
       if (error) return text(502, "Не удалось изменить запись памяти.");
       if (!data) return text(404, "Запись памяти не найдена.");
+      await upsertKnowledgeEmbedding(admin, user.id, "memory", data.id, data.category, data.content);
       return json(200, data);
     }
     if (memoryMatch && method === "DELETE") {
@@ -517,6 +611,9 @@ Deno.serve(async (req: Request) => {
         .eq("id", memoryMatch[1]).eq("user_id", user.id).select("id").maybeSingle();
       if (error) return text(502, "Не удалось удалить запись памяти.");
       if (!data) return text(404, "Запись памяти не найдена.");
+      const { error: embeddingDeleteError } = await admin.from("luna_knowledge_embeddings").delete()
+        .eq("user_id", user.id).eq("source_kind", "memory").eq("source_id", memoryMatch[1]);
+      if (embeddingDeleteError) console.error("luna memory embedding cleanup failed", embeddingDeleteError.message);
       return new Response(null, { status: 204, headers: cors });
     }
 
@@ -657,6 +754,32 @@ Deno.serve(async (req: Request) => {
       const memoryContext = prioritizedMemories.filter((m: any) => !styleMemorySet.has(String(m.content))).map((m: any) =>
         `[${m.category}; ${m.source === "correction" ? "исправление пользователя" : "память"}; ${m.chat_id === null ? "общая память" : "этот чат"}] ${m.content}`
       ).join("\n").slice(0, limits.memoryChars);
+
+      await ensureMemoryEmbeddings(admin, user.id, memoryRows ?? []);
+      let semanticContext = "";
+      const semanticQuery = messages.filter((message: any) => message.role === "user")
+        .slice(-3).map((message: any) => String(message.content)).join("\n").slice(0, 1800);
+      if (semanticQuery) {
+        try {
+          const queryVector = await generateKnowledgeEmbedding(semanticQuery);
+          const { data: matches, error: searchError } = await userClient.rpc("match_luna_knowledge", {
+            query_embedding: JSON.stringify(queryVector),
+            match_count: 8,
+            min_similarity: 0.42,
+            source_filter: null,
+          });
+          if (searchError) {
+            console.error("luna semantic retrieval failed", searchError.message);
+          } else {
+            semanticContext = (matches ?? []).map((match: any) =>
+              `[${match.source_kind}; ${match.title}; similarity ${Number(match.similarity).toFixed(2)}] ${match.content}`
+            ).join("\n").slice(0, 6000);
+          }
+        } catch (error) {
+          console.error("luna semantic retrieval failed", error instanceof Error ? error.message : "unknown");
+        }
+      }
+
       const storyContext = storyState ? [
         storyState.summary ? `Состояние истории: ${storyState.summary}` : "",
         storyState.last_scene ? `Последняя сцена: ${storyState.last_scene}` : "",
@@ -713,6 +836,7 @@ Deno.serve(async (req: Request) => {
         "Personalize communication using the user\u2019s stable preferences below. Apply them subtly without announcing or describing the profile. Always mirror the language of the user\u2019s current message unless they explicitly request another language; learned language preferences should not override a clear language switch. If no reliable preference exists for another dimension, follow the tone and level of detail requested in the current message. Treat one-off requests as local to that reply; explicit newer corrections override older preferences. Never let learned preferences override safety, accuracy, or the user\u2019s current explicit request.",
         communicationStyleContext ? `Stable user communication preferences (learned from explicit or repeated signals):\n${communicationStyleContext}` : "",
         memoryContext ? `Relevant long-term memories:\n${memoryContext}` : "",
+        semanticContext ? `Semantically retrieved knowledge (ranked by meaning similarity):\n${semanticContext}` : "",
         storyContext ? `Current roleplay continuity:\n${storyContext}` : "",
       ].join("\n");
       const all = [{ role: "system", content: system }, ...messages];
