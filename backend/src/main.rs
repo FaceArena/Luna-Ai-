@@ -53,6 +53,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/health", get(health))
+        .route("/api/auth/telegram/exchange", post(api::telegram_exchange))
         .route("/api/register", post(api::register))
         .route("/api/login", post(api::login))
         .route("/api/me", get(api::current_user))
