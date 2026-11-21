@@ -29,7 +29,7 @@
       const authUrl = new URL(SUPABASE_URL + "/auth/v1/authorize");
       authUrl.searchParams.set("provider", "custom:telegram");
       authUrl.searchParams.set("scopes", "openid profile");
-      authUrl.searchParams.set("redirect_to", window.location.origin + "/");
+      authUrl.searchParams.set("redirect_to", window.location.origin);
       authUrl.searchParams.set("code_challenge", challenge);
       authUrl.searchParams.set("code_challenge_method", "s256");
       window.location.assign(authUrl.toString());
