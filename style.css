@@ -392,6 +392,9 @@ body {
 }
 #app .dots i:nth-child(2) { animation-delay: 150ms; }
 #app .dots i:nth-child(3) { animation-delay: 300ms; }
+#app .dots.fast i { animation-duration: 720ms; }
+#app .dots.fast i:nth-child(2) { animation-delay: 90ms; }
+#app .dots.fast i:nth-child(3) { animation-delay: 180ms; }
 @keyframes lunaTyping {
   0%, 100% { opacity: .4; transform: translateY(0); }
   50% { opacity: 1; transform: translateY(-3px); }
@@ -414,6 +417,8 @@ body {
 }
 #app .dots.leaving { height: 0; opacity: 0; }
 #app .stream-text { opacity: 0; transition: opacity 180ms ease; }
+#app .stream-text.fast { transition-duration: 120ms; }
+#app .stream-text.fast .stream-char { animation-duration: 140ms; }
 #app .stream-text.active { opacity: 1; }
 
 /* Soft per-character reveal for live AI replies. Existing characters stay still. */
