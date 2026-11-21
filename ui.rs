@@ -784,6 +784,9 @@ fn PageMemory() -> impl IntoView {
                                 key=|m| m.id.clone()
                                 children=move |m| {
                                     let id = m.id.clone();
+                                    let save_id = id.clone();
+                                    let pin_id = id.clone();
+                                    let delete_id = id.clone();
                                     let edit = create_rw_signal(m.content.clone());
                                     let busy = create_rw_signal(false);
                                     let pinned = create_rw_signal(m.is_pinned);
@@ -800,7 +803,7 @@ fn PageMemory() -> impl IntoView {
                                                 on:input=move |e| edit.set(event_target_value(&e))></textarea>
                                             <div class="mem-actions">
                                                 <button class="glass" disabled=move || busy.get() on:click=move |_| {
-                                                        let id = id.clone();
+                                                        let id = save_id.clone();
                                                         busy.set(true);
                                                         let value=edit.get_untracked();
                                                         spawn_local(async move {
@@ -812,7 +815,7 @@ fn PageMemory() -> impl IntoView {
                                                         });
                                                     }>"Сохранить"</button>
                                                 <button class="glass" disabled=move || busy.get() on:click=move |_| {
-                                                        let id = id.clone();
+                                                        let id = pin_id.clone();
                                                         busy.set(true);
                                                         spawn_local(async move {
                                                             match api::update_memory(&id, &serde_json::json!({"is_pinned":!pinned.get_untracked()})).await {
@@ -826,7 +829,7 @@ fn PageMemory() -> impl IntoView {
                                                         });
                                                     }>{move || if pinned.get() { "Открепить" } else { "Закрепить" }}</button>
                                                 <button class="glass mem-delete" disabled=move || busy.get() on:click=move |_| {
-                                                        let id = id.clone();
+                                                        let id = delete_id.clone();
                                                         busy.set(true);
                                                         spawn_local(async move {
                                                             if api::delete_memory(&id).await {
