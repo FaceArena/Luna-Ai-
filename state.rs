@@ -605,7 +605,8 @@ impl Ctx {
             self.cur.set(Some(js_sys::Date::now() as i64));
         }
         let rid = self.next_uid();
-        self.log.update(|l| l.push(Row { id: rid, user: true, part: String::new(), text: t.clone(), fx: 0 }));
+        let image_preview = image_data.clone().unwrap_or_default();
+        self.log.update(|l| l.push(Row { id: rid, user: true, part: image_preview, text: t.clone(), fx: 0 }));
         self.hist.update(|h| h.push(Msg { role: "user".into(), content: t }));
         self.busy.set(true);
         self.stream.set(Some(String::new()));
