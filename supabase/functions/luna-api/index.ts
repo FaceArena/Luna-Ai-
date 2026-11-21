@@ -215,6 +215,50 @@ Deno.serve(async (req: Request) => {
       return error ? text(502, "Не удалось сохранить персональные настройки.") : json(200, { ok: true });
     }
 
+    if (path === "/api/memories" && method === "GET") {
+      const { data, error } = await userClient.from("luna_memories")
+        .select("id,chat_id,category,content,source,importance,confidence,is_pinned,updated_at")
+        .eq("user_id", user.id).order("is_pinned", { ascending: false })
+        .order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(200);
+      if (error) return text(502, "Не удалось загрузить память.");
+      return json(200, data ?? []);
+    }
+    const memoryMatch = path.match(/^\\/api\\/memories\\/([0-9a-fA-F-]{36})$/);
+    if (memoryMatch && method === "PUT") {
+      const body = await req.json().catch(() => null);
+      if (!body || typeof body !== "object") return text(400, "Некорректная запись памяти.");
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (body.content !== undefined) {
+        if (typeof body.content !== "string" || !body.content.trim() || body.content.trim().length > 500)
+          return text(400, "Текст должен содержать от 1 до 500 символов.");
+        patch.content = body.content.trim();
+      }
+      if (body.importance !== undefined) {
+        const importance = Number(body.importance);
+        if (!Number.isInteger(importance) || importance < 1 || importance > 5)
+          return text(400, "Важность должна быть от 1 до 5.");
+        patch.importance = importance;
+      }
+      if (body.is_pinned !== undefined) {
+        if (typeof body.is_pinned !== "boolean") return text(400, "Некорректный статус закрепления.");
+        patch.is_pinned = body.is_pinned;
+      }
+      if (Object.keys(patch).length === 1) return text(400, "Нет изменений для сохранения.");
+      const { data, error } = await userClient.from("luna_memories").update(patch)
+        .eq("id", memoryMatch[1]).eq("user_id", user.id)
+        .select("id,chat_id,category,content,source,importance,confidence,is_pinned,updated_at").maybeSingle();
+      if (error) return text(502, "Не удалось изменить запись памяти.");
+      if (!data) return text(404, "Запись памяти не найдена.");
+      return json(200, data);
+    }
+    if (memoryMatch && method === "DELETE") {
+      const { data, error } = await userClient.from("luna_memories").delete()
+        .eq("id", memoryMatch[1]).eq("user_id", user.id).select("id").maybeSingle();
+      if (error) return text(502, "Не удалось удалить запись памяти.");
+      if (!data) return text(404, "Запись памяти не найдена.");
+      return new Response(null, { status: 204, headers: cors });
+    }
+
     if (path === "/api/chats" && method === "GET") {
       const { data, error } = await userClient.from("luna_chats")
         .select("id,title,msgs").order("updated_at", { ascending: false });
