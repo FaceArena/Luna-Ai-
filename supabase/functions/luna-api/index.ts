@@ -121,8 +121,10 @@ Deno.serve(async (req: Request) => {
     }
 
     if (path === "/api/personal-settings" && method === "GET") {
-      const cfg = user.user_metadata?.luna_cfg;
-      return json(200, cfg && typeof cfg === "object" ? cfg : null);
+      const { data, error } = await userClient.from("luna_personal_settings")
+        .select("settings").eq("user_id", user.id).maybeSingle();
+      if (error) return text(502, "Не удалось загрузить персональные настройки.");
+      return json(200, data?.settings ?? null);
     }
     if (path === "/api/personal-settings" && method === "PUT") {
       const body = await req.json().catch(() => null);
@@ -144,7 +146,9 @@ Deno.serve(async (req: Request) => {
       if (words > limit) {
         return json(402, { error: "Лимит слов в персональных инструкциях превышен.", words, limit });
       }
-      const { error } = await userClient.auth.updateUser({ data: { luna_cfg: settings } });
+      const { error } = await userClient.from("luna_personal_settings").upsert({
+        user_id: user.id, settings, updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
       return error ? text(502, "Не удалось сохранить персональные настройки.") : json(200, { ok: true });
     }
 
