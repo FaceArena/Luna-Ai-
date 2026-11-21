@@ -36,6 +36,7 @@ pub struct LabConfig {
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct LabPersona {
     pub id: String,
+    pub title: String,
     pub name: String,
     pub who: String,
     pub rules: String,
