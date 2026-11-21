@@ -805,16 +805,16 @@ fn PageLab() -> impl IntoView {
                         <p>"Персонажи, знания и стиль ответа — в одном месте."</p>
                     </div>
                 </div>
-                <div class="lab-tabs" role="tablist" aria-label="Инструменты Luna">
-                    <button class:on=move || tab.get() == "personas" on:click=move |_| tab.set("personas".into())>"Персоны"</button>
-                    <button class:on=move || tab.get() == "lore" on:click=move |_| tab.set("lore".into())>"Лорбуки"</button>
-                    <button class:on=move || tab.get() == "presets" on:click=move |_| tab.set("presets".into())>"Пресеты"</button>
-                    <button class:on=move || tab.get() == "vectors" on:click=move |_| tab.set("vectors".into())>"Embeddings"</button>
-                    <button class:on=move || tab.get() == "plugins" on:click=move |_| tab.set("plugins".into())>"Плагины"</button>
+                <div class="lab-tabs" role="group" aria-label="Разделы лаборатории">
+                    <button type="button" aria-pressed=move || tab.get() == "personas" class:on=move || tab.get() == "personas" on:click=move |_| tab.set("personas".into())>"Персоны"</button>
+                    <button type="button" aria-pressed=move || tab.get() == "lore" class:on=move || tab.get() == "lore" on:click=move |_| tab.set("lore".into())>"Лорбуки"</button>
+                    <button type="button" aria-pressed=move || tab.get() == "presets" class:on=move || tab.get() == "presets" on:click=move |_| tab.set("presets".into())>"Пресеты"</button>
+                    <button type="button" aria-pressed=move || tab.get() == "vectors" class:on=move || tab.get() == "vectors" on:click=move |_| tab.set("vectors".into())>"Embeddings"</button>
+                    <button type="button" aria-pressed=move || tab.get() == "plugins" class:on=move || tab.get() == "plugins" on:click=move |_| tab.set("plugins".into())>"Плагины"</button>
                 </div>
                 {move || match tab.get().as_str() {
                     "personas" => view! {
-                        <div class="lab-panel">
+                        <div class="lab-panel" id="lab-panel" aria-live="polite">
                             <div class="lab-heading"><b>"Персоны"</b><span>{move || format!("{} сохранено", ctx.cfg.get().lab.personas.len())}</span></div>
                             <p class="hint">"Сохрани текущую личность Luna как отдельную персону. Применение заменит активное имя и инструкции, но не удалит сохранённые профили."</p>
                             <label class="fl" for="lab-persona-name">"Название новой персоны"</label>
@@ -839,7 +839,7 @@ fn PageLab() -> impl IntoView {
                         </div>
                     }.into_view(),
                     "lore" => view! {
-                        <div class="lab-panel">
+                        <div class="lab-panel" id="lab-panel" role="tabpanel" aria-live="polite">
                             <div class="lab-heading"><b>"Лорбуки"</b><span>{move || format!("{} записей", ctx.cfg.get().lab.lorebooks.len())}</span></div>
                             <p class="hint">"Добавляй факты о мире, героях и событиях. Запись попадёт в контекст, когда ключевое слово встретится в твоём последнем сообщении."</p>
                             <label class="fl" for="lab-lore-name">"Название"</label>
@@ -868,7 +868,7 @@ fn PageLab() -> impl IntoView {
                         </div>
                     }.into_view(),
                     "presets" => view! {
-                        <div class="lab-panel">
+                        <div class="lab-panel" id="lab-panel" role="tabpanel" aria-live="polite">
                             <div class="lab-heading"><b>"Пресеты ответа"</b><span>{move || format!("{} сохранено", ctx.cfg.get().lab.presets.len())}</span></div>
                             <p class="hint">"Пресет задаёт длину и дополнительные правила ответа. Он применяется поверх выбранной персоны."</p>
                             <label class="fl" for="lab-preset-name">"Название пресета"</label>
@@ -881,23 +881,30 @@ fn PageLab() -> impl IntoView {
                             </div>
                             <label class="fl" for="lab-preset-instructions">"Дополнительные правила"</label>
                             <textarea class="fi" id="lab-preset-instructions" maxlength="1200" placeholder="Например: сначала вывод, затем короткое объяснение." prop:value=move || preset_instructions.get() on:input=move |e| preset_instructions.set(event_target_value(&e))></textarea>
-                            <button class="cta lab-action" type="button" on:click=add_preset>"Сохранить пресет"</button>
-                            <button class="lab-mini" type="button" disabled=move || ctx.cfg.get().lab.active_preset.is_none() on:click=move |_| ctx.cfg.update(|cfg| {
-                                cfg.lab.active_preset = None;
-                                cfg.len = "normal".into();
-                            })>"Отключить активный пресет"</button>
+                            <div class="lab-preset-actions">
+                                <button class="cta lab-action lab-preset-save" type="button" on:click=add_preset>"Сохранить пресет"</button>
+                                <div class="lab-preset-active">
+                                    <span class="lab-preset-active-label">{move || if ctx.cfg.get().lab.active_preset.is_some() { "Пресет сейчас активен" } else { "Нет активного пресета" }}</span>
+                                    <button class="lab-preset-disable" type="button" disabled=move || ctx.cfg.get().lab.active_preset.is_none() on:click=move |_| ctx.cfg.update(|cfg| {
+                                        cfg.lab.active_preset = None;
+                                        cfg.len = "normal".into();
+                                    })>"Отключить"</button>
+                                </div>
+                            </div>
                             <div class="lab-list">
                                 {move || ctx.cfg.get().lab.presets.iter().map(|preset| {
                                     let item = preset.clone();
                                     let apply = preset.clone();
                                     let active_id = preset.id.clone();
+                                    let active_label_id = preset.id.clone();
+                                    let active_aria_id = preset.id.clone();
                                     let delete_id = preset.id.clone();
                                     view! {
                                         <div class="lab-item">
                                             <div class="lab-item-copy"><b>{item.name.clone()}</b><span>{match item.len.as_str() { "short" => "Кратко", "long" => "Подробно", _ => "Обычно" }}</span></div>
-                                            <button class="lab-mini" type="button" class:on=move || ctx.cfg.get().lab.active_preset.as_deref() == Some(active_id.as_str()) on:click=move |_| ctx.cfg.update(|cfg| {
+                                            <button class="lab-mini" type="button" class:on=move || ctx.cfg.get().lab.active_preset.as_deref() == Some(active_id.as_str()) aria-pressed=move || ctx.cfg.get().lab.active_preset.as_deref() == Some(active_aria_id.as_str()) on:click=move |_| ctx.cfg.update(|cfg| {
                                                 cfg.len = apply.len.clone(); cfg.lab.active_preset = Some(apply.id.clone());
-                                            })>"Применить"</button>
+                                            })>{move || if ctx.cfg.get().lab.active_preset.as_deref() == Some(active_label_id.as_str()) { "Применён" } else { "Применить" }}</button>
                                             <button class="lab-remove" type="button" aria-label="Удалить пресет" on:click=move |_| ctx.cfg.update(|cfg| {
                                                 cfg.lab.presets.retain(|p| p.id != delete_id);
                                                 if cfg.lab.active_preset.as_deref() == Some(delete_id.as_str()) { cfg.lab.active_preset = None; cfg.len = "normal".into(); }
@@ -909,7 +916,7 @@ fn PageLab() -> impl IntoView {
                         </div>
                     }.into_view(),
                     "vectors" => view! {
-                        <div class="lab-panel">
+                        <div class="lab-panel" id="lab-panel" role="tabpanel" aria-live="polite">
                             <div class="lab-heading"><b>"Векторная память"</b><span class="lab-status">"Английский · активен"</span></div>
                             <p class="hint">"Для английских записей Luna строит embeddings и ищет совпадения по смыслу. Для русского текста пока используются ключевые слова и правила активации лорбуков."</p>
                             <div class="lab-info-row"><span>"Embeddings-модель"</span><b>"Supabase gte-small · 384 · EN"</b></div>
@@ -919,7 +926,7 @@ fn PageLab() -> impl IntoView {
                         </div>
                     }.into_view(),
                     _ => view! {
-                        <div class="lab-panel">
+                        <div class="lab-panel" id="lab-panel" role="tabpanel" aria-live="polite">
                             <div class="lab-heading"><b>"Плагины"</b><span class="lab-status">"Не подключены"</span></div>
                             <p class="hint">"Плагинов с реальным серверным исполнением пока нет. Здесь появится каталог интеграций с описанием разрешений, подтверждением действий и журналом вызовов."</p>
                             <div class="lab-info-row"><span>"Реестр инструментов"</span><b>"Не настроен"</b></div>
