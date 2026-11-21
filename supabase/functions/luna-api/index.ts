@@ -30,7 +30,7 @@ const MEMORY_CATEGORIES = new Set(["character", "relationship", "world", "event"
 function memoryText(value: unknown, max = 1800) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
-async function saveRoleplayMemory(client: any, userId: string, chatId: number, model: string, apiKey: string, messages: any[], answer: string) {
+async function saveRoleplayMemory(client: any, userId: string, chatId: number, keepChat: boolean, model: string, apiKey: string, messages: any[], answer: string) {
   const extractionMessages = [
     { role: "system", content: [
       'Extract durable roleplay memory. Return ONLY JSON: {"memories":[{"category":"character|relationship|world|event|preference|correction|open_thread|other","scope":"global|chat","content":"...","importance":1,"confidence":0.9,"source":"explicit|correction"}],"summary":"...","last_scene":"...","open_threads":["..."]}.',
@@ -57,7 +57,7 @@ async function saveRoleplayMemory(client: any, userId: string, chatId: number, m
     for (const item of candidates) {
       const category = String(item?.category ?? "");
       const content = memoryText(item?.content, 500);
-      const scope = item?.scope === "global" ? "global" : "chat";
+      const scope = item?.scope === "global" || !keepChat ? "global" : "chat";
       if (!MEMORY_CATEGORIES.has(category) || !content) continue;
       if (scope === "global" && !["character", "relationship", "world", "preference", "correction"].includes(category)) continue;
       const chatScope = scope === "global" ? null : chatId;
@@ -81,7 +81,7 @@ async function saveRoleplayMemory(client: any, userId: string, chatId: number, m
         confidence: Math.max(0, Math.min(1, Number(item.confidence) || 0.8))
       });
     }
-    await client.from("luna_chat_memory_state").upsert({
+    if (keepChat) await client.from("luna_chat_memory_state").upsert({
       user_id: userId, chat_id: chatId,
       summary: memoryText(parsed.summary, 12000),
       last_scene: memoryText(parsed.last_scene, 8000),
@@ -267,9 +267,20 @@ Deno.serve(async (req: Request) => {
 
       const chatId = Number(body.chat_id);
       if (!Number.isSafeInteger(chatId) || chatId <= 0) return text(400, "Некорректный идентификатор чата.");
+      const keepChat = body.keep !== false;
+      if (keepChat) {
+        const firstUserMessage = messages.find((m: any) => m.role === "user")?.content ?? "";
+        const { error: chatSeedError } = await userClient.from("luna_chats").upsert({
+          user_id: user.id, id: chatId,
+          title: String(firstUserMessage).slice(0, 40),
+          msgs: messages, updated_at: new Date().toISOString()
+        }, { onConflict: "user_id,id" });
+        if (chatSeedError) return text(502, "Не удалось подготовить сохранение истории.");
+      }
+
       const { data: memoryRows } = await userClient.from("luna_memories")
         .select("category,content,importance,confidence,source,chat_id")
-        .eq("user_id", user.id).or(`chat_id.is.null,chat_id.eq.${chatId}`)
+        .eq("user_id", user.id).or(body.keep === false ? "chat_id.is.null" : `chat_id.is.null,chat_id.eq.${chatId}`)
         .order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(40);
       const { data: storyState } = await userClient.from("luna_chat_memory_state")
         .select("summary,last_scene,open_threads").eq("user_id", user.id).eq("chat_id", chatId).maybeSingle();
@@ -338,7 +349,7 @@ Deno.serve(async (req: Request) => {
       const result = await upstream.json();
       const answer = result?.choices?.[0]?.message?.content;
       if (typeof answer !== "string") return text(502, "Не удалось сформировать ответ.");
-      await saveRoleplayMemory(userClient, user.id, chatId, model, apiKey, messages, answer);
+      await saveRoleplayMemory(userClient, user.id, chatId, keepChat, model, apiKey, messages, answer);
       return text(200, answer);
     }
 
