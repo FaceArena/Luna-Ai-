@@ -145,7 +145,7 @@ Deno.serve(async (req: Request) => {
       if (body.action === "select") {
         const model = String(body.model ?? "").trim();
         const allowed = provider === "groq"
-          ? ["llama-3.3-70b-versatile", "openai/gpt-oss-120b"]
+          ? ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
           : ["gemini-2.5-flash", "gemini-2.5-pro"];
         if (!allowed.includes(model)) return json(400, { error: "Unsupported model" });
         const { data: existing, error: readError } = await admin.from("luna_provider_settings")
