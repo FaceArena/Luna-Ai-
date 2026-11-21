@@ -644,9 +644,12 @@ fn PageAcc() -> impl IntoView {
                                    prop:value=move || pass.get() on:input=move |e| pass.set(event_target_value(&e))/>
                             <Show when=move || up.get()>
                                 <div class="grp" style="margin-top:14px">
-                                    <div class="row" on:click=move |_| ok.update(|v| *v = !*v)>
-                                        <span class="rt">"Принимаю условия и политику"</span><span class="tg" class:on=move || ok.get()></span>
-                                    </div>
+                                    <label class="row consent-row">
+                                        <input class="consent-check" type="checkbox"
+                                               prop:checked=move || ok.get()
+                                               on:change=move |e| { ok.set(event_target_checked(&e)); err.set(String::new()); }/>
+                                        <span class="rt">"Принимаю условия и политику"</span>
+                                    </label>
                                     {doc_row(ctx, None, "Условия использования", "terms", Page::Acc)}
                                     {doc_row(ctx, None, "Политика конфиденциальности", "privacy", Page::Acc)}
                                     {doc_row(ctx, None, "Согласие на обработку данных", "consent", Page::Acc)}
@@ -655,7 +658,7 @@ fn PageAcc() -> impl IntoView {
                             <p class="err">{move || err.get()}</p>
                             <p class="hint">{move || info.get()}</p>
                             <button class="cta" type="submit" disabled=move || auth_busy.get()>{move || if auth_busy.get() { "Подождите…" } else if up.get() { "Создать аккаунт" } else { "Войти" }}</button>
-                            <button class="lnk" type="button" disabled=move || auth_busy.get() on:click=move |_| { err.set(String::new()); info.set(String::new()); up.update(|v| *v = !*v); }>
+                            <button class="lnk" type="button" disabled=move || auth_busy.get() on:click=move |_| { err.set(String::new()); info.set(String::new()); ok.set(false); up.update(|v| *v = !*v); }>
                                 {move || if up.get() { "У меня уже есть аккаунт" } else { "Создать аккаунт" }}
                             </button>
                             <p class="hint">"Пароль обрабатывается сервером; приложение не хранит его в открытом виде."</p>
