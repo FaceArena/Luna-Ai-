@@ -129,7 +129,7 @@ async function isLunaChannelMember(admin: any, user: any): Promise<boolean> {
     identity?.provider === "custom:telegram" || identity?.provider === "telegram"
   );
   const telegramId = String(telegramIdentity?.identity_data?.sub ?? "");
-  if (!/^\\d{5,20}$/.test(telegramId)) return false;
+  if (!/^\d{5,20}$/.test(telegramId)) return false;
 
   const cached = membershipCache.get(telegramId);
   if (cached && Date.now() - cached.checkedAt < (cached.member ? 60_000 : 15_000)) return cached.member;
