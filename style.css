@@ -413,6 +413,18 @@ body {
 #app .dots.leaving { height: 0; opacity: 0; }
 #app .stream-text { opacity: 0; transition: opacity 180ms ease; }
 #app .stream-text.active { opacity: 1; }
+#app .stream-text.active::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 3px;
+  vertical-align: -.12em;
+  border-radius: 2px;
+  background: var(--b);
+  animation: typing-caret .85s steps(2, start) infinite;
+}
+@keyframes typing-caret { to { opacity: 0; } }
 #log { position: relative; overflow-anchor: none; }
 #messages-content {
   display: flex;
