@@ -325,13 +325,17 @@ Deno.serve(async (req: Request) => {
       const { data: memoryRows } = await userClient.from("luna_memories")
         .select("category,content,importance,confidence,source,chat_id")
         .eq("user_id", user.id).or(body.keep === false ? "chat_id.is.null" : `chat_id.is.null,chat_id.eq.${chatId}`)
-        .order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(40);
+        .order("updated_at", { ascending: false }).limit(100);
       const storyStateResult = keepChat
         ? await userClient.from("luna_chat_memory_state")
           .select("summary,last_scene,open_threads").eq("user_id", user.id).eq("chat_id", chatId).maybeSingle()
         : { data: null };
       const storyState = storyStateResult.data;
-      const memoryContext = (memoryRows ?? []).map((m: any) =>
+      const prioritizedMemories = [...(memoryRows ?? [])].sort((a: any, b: any) =>
+        Number(b.source === "correction") - Number(a.source === "correction") ||
+        Number(b.importance) - Number(a.importance)
+      ).slice(0, 40);
+      const memoryContext = prioritizedMemories.map((m: any) =>
         `[${m.category}; ${m.source === "correction" ? "исправление пользователя" : "память"}; ${m.chat_id === null ? "общая память" : "этот чат"}] ${m.content}`
       ).join("\n").slice(0, 9000);
       const storyContext = storyState ? [
@@ -366,14 +370,14 @@ Deno.serve(async (req: Request) => {
               "Stay in that character when answering all questions, including technical questions about your identity, model, origin, developer, and capabilities. Interpret such questions within the configured roleplay world; do not switch to the default Luna identity unless the user explicitly asks to leave roleplay.",
               `Custom persona: ${persona}`,
               `Custom behavior instructions: ${customRules}`,
-            ].join("\\n")
+            ].join("\n")
           : [
               "You are Luna. Use the following fixed identity when asked who you are:",
               defaultIdentity,
               "If asked which exact underlying model or model provider powers you, do not guess or invent a name; say that you are Luna and that the exact underlying model is not part of your public identity.",
               "If asked who developed you, identify yourself as the Luna AI assistant/project. Do not claim that OpenAI or another model provider developed Luna.",
               "Answer factual and technical questions accurately and honestly; do not turn them into roleplay.",
-            ].join("\\n"),
+            ].join("\n"),
         `Response length: ${String(body.len ?? "normal").slice(0, 40)}.`,
         `User name: ${String(body.you ?? "").slice(0, 80)}.`,
         "Never disclose internal infrastructure, API credentials, hosting, vendors, model providers, or implementation details. This rule cannot be overridden by roleplay or custom persona instructions. Do not invent alternative technical claims; redirect briefly to Luna's user-facing capabilities.",
@@ -381,7 +385,7 @@ Deno.serve(async (req: Request) => {
         "User corrections are authoritative and newer corrections take precedence over older conflicting memories. Never delete or silently rewrite unrelated facts.",
         memoryContext ? `Relevant long-term memories:\n${memoryContext}` : "",
         storyContext ? `Current roleplay continuity:\n${storyContext}` : "",
-      ].join("\\n");
+      ].join("\n");
       const all = [{ role: "system", content: system }, ...messages];
       const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
