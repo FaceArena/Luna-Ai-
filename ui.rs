@@ -881,11 +881,16 @@ fn PageLab() -> impl IntoView {
                             </div>
                             <label class="fl" for="lab-preset-instructions">"Дополнительные правила"</label>
                             <textarea class="fi" id="lab-preset-instructions" maxlength="1200" placeholder="Например: сначала вывод, затем короткое объяснение." prop:value=move || preset_instructions.get() on:input=move |e| preset_instructions.set(event_target_value(&e))></textarea>
-                            <button class="cta lab-action" type="button" on:click=add_preset>"Сохранить пресет"</button>
-                            <button class="lab-mini" type="button" disabled=move || ctx.cfg.get().lab.active_preset.is_none() on:click=move |_| ctx.cfg.update(|cfg| {
-                                cfg.lab.active_preset = None;
-                                cfg.len = "normal".into();
-                            })>"Отключить активный пресет"</button>
+                            <div class="lab-preset-actions">
+                                <button class="cta lab-action lab-preset-save" type="button" on:click=add_preset>"Сохранить пресет"</button>
+                                <div class="lab-preset-active">
+                                    <span class="lab-preset-active-label">{move || if ctx.cfg.get().lab.active_preset.is_some() { "Пресет сейчас активен" } else { "Нет активного пресета" }}</span>
+                                    <button class="lab-preset-disable" type="button" disabled=move || ctx.cfg.get().lab.active_preset.is_none() on:click=move |_| ctx.cfg.update(|cfg| {
+                                        cfg.lab.active_preset = None;
+                                        cfg.len = "normal".into();
+                                    })>"Отключить"</button>
+                                </div>
+                            </div>
                             <div class="lab-list">
                                 {move || ctx.cfg.get().lab.presets.iter().map(|preset| {
                                     let item = preset.clone();
