@@ -173,25 +173,16 @@ Deno.serve(async (req: Request) => {
       const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, messages: all, stream: true }),
+        body: JSON.stringify({ model, messages: all, stream: false }),
       });
       if (!upstream.ok) {
         if ([401, 403].includes(upstream.status)) return text(422, "Провайдер отклонил API-ключ.");
         if (upstream.status === 429) return text(429, "Лимит запросов AI-провайдера.");
         return text(502, "Не удалось получить ответ AI-провайдера.");
       }
-      if (!upstream.body) return text(502, "AI-провайдер не вернул поток ответа.");
-      // Передаём OpenAI-compatible SSE клиенту без буферизации.
-      // Интерфейс извлекает delta.content и показывает текст по мере генерации.
-      return new Response(upstream.body, {
-        status: 200,
-        headers: {
-          ...cors,
-          "Content-Type": "text/event-stream; charset=utf-8",
-          "Cache-Control": "no-cache, no-transform",
-          "X-Accel-Buffering": "no",
-        },
-      });
+      const result = await upstream.json();
+      const answer = result?.choices?.[0]?.message?.content;
+      return typeof answer === "string" ? text(200, answer) : text(502, "Некорректный ответ AI-провайдера.");
     }
 
     return text(404, "Маршрут не найден.");
