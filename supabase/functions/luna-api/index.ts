@@ -731,7 +731,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const { data: memoryRows } = await userClient.from("luna_memories")
-        .select("category,content,importance,confidence,source,chat_id")
+        .select("id,category,content,importance,confidence,source,chat_id")
         .eq("user_id", user.id).or(body.keep === false ? "chat_id.is.null" : `chat_id.is.null,chat_id.eq.${chatId}`)
         .order("updated_at", { ascending: false }).limit(limits.memoryRows);
       const { data: styleRowsRaw } = await userClient.from("luna_memories")
