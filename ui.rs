@@ -878,7 +878,7 @@ fn Log() -> impl IntoView {
             }
         });
         resize_cb.forget();
-        observer.forget();
+        std::mem::forget(observer);
     }
 
     view! {
