@@ -1,11 +1,7 @@
 module.exports = async function handler(req, res) {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const publishableKey = process.env.SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !publishableKey) {
-    res.statusCode = 500;
-    res.end("Luna API proxy is not configured.");
-    return;
-  }
+  // Supabase publishable keys are designed to be public; no service-role or provider secret is stored here.
+  const supabaseUrl = "https://efycijufegudtvvhnxzv.supabase.co";
+  const publishableKey = "sb_publishable_FubYDvcEUqV5TyY7UGfbOA_n3o2BmoU";
 
   const incoming = new URL(req.url || "/", `https://${req.headers.host || "localhost"}`);
   const edgePath = incoming.pathname === "/api/health"
