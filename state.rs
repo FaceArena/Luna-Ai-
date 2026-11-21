@@ -542,14 +542,39 @@ impl Ctx {
             };
             let mut stream = wasm_streams::ReadableStream::from_raw(raw.unchecked_into()).into_stream();
             let mut buf: Vec<u8> = Vec::new();
+            let mut shown = 0usize;
+            let mut first_chunk = true;
+            const CHUNKS: [usize; 6] = [3, 4, 2, 5, 4, 6];
+
             while let Some(chunk) = stream.next().await {
                 if self.run.get_value() != my {
                     return;
                 }
                 let Ok(v) = chunk else { break };
                 buf.extend(js_sys::Uint8Array::new(&v).to_vec());
-                self.stream.set(Some(clean(&String::from_utf8_lossy(&buf))));
-                self.scroll(false);
+
+                if first_chunk {
+                    first_chunk = false;
+                    gloo_timers::future::TimeoutFuture::new(1000).await;
+                    if self.run.get_value() != my {
+                        return;
+                    }
+                }
+
+                let full = clean(&String::from_utf8_lossy(&buf));
+                let chars: Vec<char> = full.chars().collect();
+                while shown < chars.len() {
+                    if self.run.get_value() != my {
+                        return;
+                    }
+                    shown = (shown + CHUNKS[shown % CHUNKS.len()]).min(chars.len());
+                    let visible: String = chars[..shown].iter().collect();
+                    self.stream.set(Some(visible));
+                    self.scroll(false);
+                    if shown < chars.len() {
+                        gloo_timers::future::TimeoutFuture::new(100).await;
+                    }
+                }
             }
             if self.run.get_value() != my {
                 return;
@@ -558,6 +583,7 @@ impl Ctx {
             if out.is_empty() {
                 return self.fail(ERR.into(), 0);
             }
+            self.stream.set(Some(out.clone()));
             self.hist.update(|h| h.push(Msg { role: "assistant".into(), content: out.clone() }));
             self.push_ai("", out, 0);
             self.persist();
@@ -573,10 +599,13 @@ impl Ctx {
             a.abort();
         }
         let part = self.stream.get_untracked().unwrap_or_default().trim().to_string();
-        let w = pick(&data().tpl_stop);
-        let content = if part.is_empty() { w.clone() } else { format!("{part}\n\n{w}") };
-        self.hist.update(|h| h.push(Msg { role: "assistant".into(), content }));
-        self.push_ai(&part, w, 1);
-        self.persist();
+        if !part.is_empty() {
+            self.hist.update(|h| h.push(Msg { role: "assistant".into(), content: part.clone() }));
+            self.push_ai("", part, 0);
+            self.persist();
+        } else {
+            self.stream.set(None);
+            self.busy.set(false);
+        }
     }
 }
