@@ -458,7 +458,7 @@ fn PageMain() -> impl IntoView {
         .map(|(k, m)| (k.to_string(), format!("{}{}", m.n, if m.pro { " (платная)" } else { "" })))
         .collect();
     let theme_opts: Vec<(String, String)> =
-        [("dark", "Тёмная"), ("black", "Полностью чёрная"), ("light", "Светлая")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+        [("dark", "Тёмная"), ("light", "Светлая")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
     let fs_opts: Vec<(String, String)> =
         [("s", "Мелкий"), ("m", "Обычный"), ("l", "Крупный")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
 
