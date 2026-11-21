@@ -52,15 +52,17 @@ pub fn App() -> impl IntoView {
     globals(ctx);
     view! {
         <div id="app">
-            <Header/>
+            <div id="shell">
+                <Header/>
+                <Log/>
+                <Composer/>
+            </div>
             <PalPop/>
             <ModelPop/>
             <div class="scrim" class:on=move || ctx.drawer.get() || ctx.sheet.get() on:click=move |_| ctx.close_all()></div>
             <div class="glass toast" class:on=move || ctx.toast_on.get() role="status">{move || ctx.toast.get()}</div>
             <Drawer/>
             <Sheet/>
-            <Log/>
-            <Composer/>
         </div>
     }
 }
