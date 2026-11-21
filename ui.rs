@@ -872,35 +872,31 @@ fn PageAbout() -> impl IntoView {
         <section class=pgc(ctx, Page::About)>
             {ph(ctx, || "О приложении".into(), move || ctx.open_page(Page::Main))}
             <div class="sc about-sc">
-                <div class="about-intro">
-                    <span class="about-eyebrow">"LUNA AI · О ПРОЕКТЕ"</span>
+                <div class="about-content">
                     <h2>"Место для общения и историй"</h2>
-                    <p>"Придумывайте персонажей, развивайте сюжеты и ведите собственные диалоги."</p>
+                    <p class="about-lead">"Luna AI — приложение, в котором можно создавать персонажей, придумывать сюжеты и вести собственные диалоги."</p>
+
+                    <section class="about-section">
+                        <h3>"Что такое Luna AI"</h3>
+                        <p>"Это пространство для общения, творчества и ролевых историй. Вы задаёте направление, создаёте героев и развиваете сюжет в собственном темпе."</p>
+                    </section>
+
+                    <section class="about-section">
+                        <h3>"Авторский проект"</h3>
+                        <p>"Luna — самостоятельный авторский проект, который я развиваю лично. В работе использую AI-инструменты и подход вайб-кодинга: превращаю идеи в функции и постепенно совершенствую приложение."</p>
+                    </section>
+
+                    <section class="about-section">
+                        <h3>"Развитие и качество"</h3>
+                        <p>"Luna постоянно развивается. Поэтому иногда возможны ошибки, недоработки или временные сбои. Я стараюсь оперативно исправлять проблемы, однако не могу гарантировать полностью бесперебойную работу."</p>
+                    </section>
+
+                    <section class="about-section about-support-section">
+                        <h3>"Поддержать проект"</h3>
+                        <p>"Если вам нравится Luna и вы хотите поддержать её развитие, подписывайтесь на мой Telegram-канал."</p>
+                        <a class="cta" href="https://t.me/LunaAiroll" target="_blank" rel="noopener noreferrer">"Подписаться на Telegram-канал"</a>
+                    </section>
                 </div>
-                <div class="about-card">
-                    <div class="about-card-icon">{ic("info")}</div>
-                    <div>
-                        <b>"Что такое Luna AI"</b>
-                        <p>"Luna AI — приложение для общения, историй и ролевых игр. Здесь можно придумывать персонажей, развивать сюжеты и вести собственные диалоги."</p>
-                    </div>
-                </div>
-                <div class="about-card">
-                    <div class="about-card-icon">{ic("ai")}</div>
-                    <div>
-                        <b>"Авторский проект"</b>
-                        <p>"Luna — мой самостоятельный авторский проект. Я развиваю его один, используя AI-инструменты и подход, который называют вайб-кодингом: превращаю идеи в работающие функции и постепенно улучшаю приложение."</p>
-                    </div>
-                </div>
-                <div class="about-note">
-                    <div class="about-note-head"><span class="about-note-dot"></span><b>"Проект развивается"</b></div>
-                    <p>"В приложении могут встречаться ошибки, недоработки и временные сбои. Я стараюсь исправлять проблемы и делать Luna лучше, но не обещаю безупречную работу там, где её нельзя гарантировать."</p>
-                </div>
-                <div class="about-support">
-                    <b>"Поддержать развитие Luna"</b>
-                    <p>"Если вам близка Luna и вы хотите поддержать её развитие, буду рад вашей подписке на мой Telegram-канал."</p>
-                    <a class="cta" href="https://t.me/LunaAiroll" target="_blank" rel="noopener noreferrer">"Подписаться на Telegram-канал"</a>
-                </div>
-                <div class="about-foot">"Luna AI"</div>
             </div>
         </section>
     }
