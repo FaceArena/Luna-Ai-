@@ -786,7 +786,7 @@ fn PageMemory() -> impl IntoView {
                                     let id = m.id.clone();
                                     let edit = create_rw_signal(m.content.clone());
                                     let busy = create_rw_signal(false);
-                                    let pinned = m.is_pinned;
+                                    let pinned = create_rw_signal(m.is_pinned);
                                     let category = category_name(&m.category).to_string();
                                     let scope = if m.chat_id.is_some() { "Этот чат" } else { "Общая память" };
                                     view! {
@@ -819,13 +819,16 @@ fn PageMemory() -> impl IntoView {
                                                         busy.set(true);
                                                         spawn_local(async move {
                                                             match api::update_memory(&id, &serde_json::json!({"is_pinned":!pinned})).await {
-                                                                Ok(saved) => items.update(|all| if let Some(row)=all.iter_mut().find(|x| x.id==saved.id) { *row=saved; }),
+                                                                Ok(saved) => {
+                                                                    pinned.set(saved.is_pinned);
+                                                                    items.update(|all| if let Some(row)=all.iter_mut().find(|x| x.id==saved.id) { *row=saved; });
+                                                                },
                                                                 Err(_) => ctx.say("Не удалось изменить закрепление."),
                                                             }
                                                             busy.set(false);
                                                         });
                                                     }
-                                                }>{if pinned { "Открепить" } else { "Закрепить" }}</button>
+                                                }>{move || if pinned.get() { "Открепить" } else { "Закрепить" }}</button>
                                                 <button class="glass mem-delete" disabled=move || busy.get() on:click={
                                                     let id=id.clone();
                                                     move |_| {
