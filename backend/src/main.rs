@@ -1,14 +1,23 @@
+mod api;
 mod providers;
 
-use axum::{routing::get, Json, Router};
+use axum::{routing::{delete, get, post, put}, Json, Router};
 use serde_json::{json, Value};
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 use tower_http::trace::TraceLayer;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub http: reqwest::Client,
+    pub supabase_url: Arc<str>,
+    pub supabase_anon_key: Arc<str>,
+}
 
 async fn health() -> Json<Value> {
     Json(json!({
         "service": "luna-server",
         "status": "ok",
+        "api": ["auth", "chat-history", "chat"],
         "providers": ["groq", "gemini"]
     }))
 }
@@ -22,8 +31,36 @@ async fn main() {
         )
         .init();
 
+    let supabase_url = std::env::var("SUPABASE_URL")
+        .expect("SUPABASE_URL must be configured");
+    let supabase_anon_key = std::env::var("SUPABASE_ANON_KEY")
+        .expect("SUPABASE_ANON_KEY must be configured");
+    let supabase_url = supabase_url.trim_end_matches('/').to_owned();
+
+    let http = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .user_agent(concat!("Luna-AI/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .expect("failed to initialize HTTP client");
+
+    let state = AppState {
+        http,
+        supabase_url: Arc::from(supabase_url),
+        supabase_anon_key: Arc::from(supabase_anon_key),
+    };
+
     let app = Router::new()
         .route("/health", get(health))
+        .route("/api/register", post(api::register))
+        .route("/api/login", post(api::login))
+        .route("/api/me", get(api::current_user))
+        .route("/api/logout", post(api::logout))
+        .route("/api/chats", get(api::list_chats).delete(api::delete_all_chats))
+        .route("/api/chats/:id", put(api::save_chat).delete(api::delete_chat))
+        .route("/api/chat", post(api::chat))
+        .route("/api/plan", put(api::plan))
+        .with_state(state)
+        .layer(axum::extract::DefaultBodyLimit::max(512 * 1024))
         .layer(TraceLayer::new_for_http());
 
     let port = std::env::var("PORT")
