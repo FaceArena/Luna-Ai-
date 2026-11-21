@@ -414,6 +414,17 @@ body {
 #app .dots.leaving { height: 0; opacity: 0; }
 #app .stream-text { opacity: 0; transition: opacity 180ms ease; }
 #app .stream-text.active { opacity: 1; }
+
+/* Soft per-character reveal for live AI replies. Existing characters stay still. */
+#app .stream-char {
+  display: inline;
+  animation: streamCharIn 220ms cubic-bezier(.22, 1, .36, 1) both;
+  will-change: opacity, transform, filter;
+}
+@keyframes streamCharIn {
+  from { opacity: 0; transform: translateY(.2em); filter: blur(1.5px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
 #log { position: relative; }
 #messages-content {
   display: flex;
