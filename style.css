@@ -509,3 +509,63 @@ html, body {
 .mem-actions button{border:0;border-radius:18px;padding:9px 12px;color:var(--fg);font:inherit;font-size:13px;cursor:pointer}
 .mem-actions button:disabled{opacity:.45}
 .mem-actions .mem-delete{color:#ff8b8b}
+
+/* iPhone Safari: keep the memory manager inside the sheet's padded content box. */
+.memory-sc {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 4px 18px calc(env(safe-area-inset-bottom, 0px) + 28px);
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+.memory-sc > .hint {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 0 14px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.memory-sc .mem-list,
+.memory-sc .mem-item,
+.memory-sc .mem-edit,
+.memory-sc .mem-actions {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin-left: auto;
+  margin-right: auto;
+}
+.memory-sc .mem-item {
+  padding: 14px;
+  text-align: left;
+}
+.memory-sc .mem-meta {
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+.memory-sc .mem-edit {
+  display: block;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.memory-sc .mem-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.memory-sc .mem-actions button {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+}
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
