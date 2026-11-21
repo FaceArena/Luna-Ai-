@@ -1,4 +1,4 @@
-use crate::state::{Chat, Me};
+use crate::state::{Chat, Cfg, Me};
 use gloo_net::http::Request;
 
 pub async fn me() -> Option<Me> {
@@ -7,6 +7,19 @@ pub async fn me() -> Option<Me> {
         return None;
     }
     r.json().await.ok()
+}
+
+pub async fn get_personal_settings() -> Result<Option<Cfg>, ()> {
+    let response = Request::get("/api/personal-settings").send().await.map_err(|_| ())?;
+    if !response.ok() { return Err(()); }
+    response.json().await.map_err(|_| ())
+}
+
+pub async fn put_personal_settings(cfg: &Cfg) -> bool {
+    match Request::put("/api/personal-settings").json(cfg) {
+        Ok(request) => request.send().await.map(|r| r.ok()).unwrap_or(false),
+        Err(_) => false,
+    }
 }
 
 pub async fn logout() {
