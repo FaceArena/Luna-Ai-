@@ -1,6 +1,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.56.0";
 
+declare const Supabase: {
+  ai: {
+    Session: new (model: "gte-small") => {
+      run(
+        input: string,
+        options: { mean_pool: true; normalize: true },
+      ): Promise<ArrayLike<number>>;
+    };
+  };
+};
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, apikey, content-type",
