@@ -1,12 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://efycijufegudtvvhnxzv.supabase.co/functions/v1/luna-api/api/:path*"
-    },
-    {
       "source": "/health",
-      "destination": "https://efycijufegudtvvhnxzv.supabase.co/functions/v1/luna-api/health"
+      "destination": "/api/health"
     }
   ]
 }
