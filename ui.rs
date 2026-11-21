@@ -139,37 +139,22 @@ fn globals(ctx: Ctx) {
         let _ = r.class_list().toggle_with_force("paused", document().hidden());
     });
 
-    // iOS Safari: размер и вертикальное смещение видимой области.
+    // iOS Safari: синхронизируем только геометрию видимой области.
+    // Не трогаем scrollTop ленты во время resize/scroll: Safari сам управляет
+    // прокруткой при показе клавиатуры, а повторная коррекция вызывала скачки
+    // и визуальное сжатие всего чата.
     if let Some(vv) = window().visual_viewport() {
         let update_viewport = {
             let root = root.clone();
             let vv = vv.clone();
             move || {
-                let log_metrics = document().query_selector("#log").ok().flatten()
-                    .and_then(|node| node.dyn_into::<web_sys::HtmlElement>().ok())
-                    .map(|el| {
-                        let distance = (el.scroll_height() - el.scroll_top() - el.client_height()).max(0);
-                        (el, distance)
-                    });
-                let _ = root.style().set_property("--vvh", &format!("{}px", vv.height()));
-                let _ = root.style().set_property("--vvt", &format!("{}px", vv.offset_top()));
-                let layout_h = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(vv.height());
-                let keyboard_open = vv.height() < layout_h - 120.0;
+                let height = vv.height().max(1.0);
+                let offset_top = vv.offset_top().max(0.0);
+                let _ = root.style().set_property("--vvh", &format!("{height}px"));
+                let _ = root.style().set_property("--vvt", &format!("{offset_top}px"));
+                let layout_h = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(height);
+                let keyboard_open = height < layout_h - 120.0;
                 let _ = root.class_list().toggle_with_force("keyboard-open", keyboard_open);
-                if let Some((_, distance)) = log_metrics.as_ref() {
-                    let distance = *distance;
-                    request_animation_frame(move || {
-                        if let Ok(Some(node)) = document().query_selector("#log") {
-                            if let Ok(el) = node.dyn_into::<web_sys::HtmlElement>() {
-                                let top = (el.scroll_height() - el.client_height() - distance).max(0);
-                                el.set_scroll_top(top);
-                            }
-                        }
-                    });
-                }
-                // Не сбрасываем window.scrollTo() на каждом событии VisualViewport:
-                // Safari сам меняет visual viewport при появлении клавиатуры, а принудительный
-                // сброс создаёт гонку с его внутренним repositioning.
             }
         };
         update_viewport();
@@ -178,8 +163,8 @@ fn globals(ctx: Ctx) {
         let _ = vv.add_event_listener_with_callback("scroll", fit.as_ref().unchecked_ref());
         fit.forget();
     } else {
-        let h = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let _ = root.style().set_property("--vvh", &format!("{}px", h));
+        let h = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(1.0).max(1.0);
+        let _ = root.style().set_property("--vvh", &format!("{h}px"));
         let _ = root.style().set_property("--vvt", "0px");
     }
 }
@@ -473,7 +458,7 @@ fn PageMain() -> impl IntoView {
         .map(|(k, m)| (k.to_string(), format!("{}{}", m.n, if m.pro { " (платная)" } else { "" })))
         .collect();
     let theme_opts: Vec<(String, String)> =
-        [("auto", "По умолчанию"), ("dark", "Тёмная"), ("black", "Полностью чёрная"), ("light", "Светлая")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+        [("dark", "Тёмная"), ("black", "Полностью чёрная"), ("light", "Светлая")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
     let fs_opts: Vec<(String, String)> =
         [("s", "Мелкий"), ("m", "Обычный"), ("l", "Крупный")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
 
