@@ -1,7 +1,7 @@
 use crate::{api, data::data, state::*};
 use leptos::*;
 use std::time::Duration;
-use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast};
+use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast, JsValue};
 
 #[wasm_bindgen]
 extern "C" {
