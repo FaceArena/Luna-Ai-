@@ -1,5 +1,11 @@
 # Luna API server
 
+## Beta deployment architecture
+
+The beta currently serves the Leptos/WASM frontend from Vercel and routes `/api/*` through the Vercel Node proxy at `api/[...path].js` to the Supabase Edge Function `luna-api`. The proxy adds the project's **publishable** Supabase key; it does not contain a service-role key or any Groq/Gemini credential. The Edge Function validates the user's Supabase session, applies RLS-backed chat persistence, and accesses provider keys through narrowly permissioned Vault RPC functions.
+
+The Axum service documented below remains available as a standalone backend/local deployment option. It is not the currently deployed beta API runtime.
+
 This Axum service restores the API surface consumed by the existing Leptos client.
 
 ## Implemented routes
