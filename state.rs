@@ -21,6 +21,42 @@ pub struct Cfg {
     pub fs: String,
     pub keep: bool,
     pub glass: u32,
+    pub lab: LabConfig,
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct LabConfig {
+    pub personas: Vec<LabPersona>,
+    pub presets: Vec<LabPreset>,
+    pub lorebooks: Vec<LabLorebook>,
+    pub active_preset: Option<String>,
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub struct LabPersona {
+    pub id: String,
+    pub title: String,
+    pub name: String,
+    pub who: String,
+    pub rules: String,
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub struct LabPreset {
+    pub id: String,
+    pub name: String,
+    pub len: String,
+    pub instructions: String,
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub struct LabLorebook {
+    pub id: String,
+    pub name: String,
+    pub keywords: Vec<String>,
+    pub content: String,
+    pub enabled: bool,
 }
 impl Default for Cfg {
     fn default() -> Self {
@@ -35,6 +71,7 @@ impl Default for Cfg {
             fs: "m".into(),
             keep: true,
             glass: 100,
+            lab: LabConfig::default(),
         }
     }
 }
@@ -108,6 +145,7 @@ pub enum Page {
     Acc,
     Plan,
     Memory,
+    Lab,
     About,
     Doc,
 }
@@ -579,9 +617,37 @@ impl Ctx {
         let cfg = self.cfg.get_untracked();
         let h = self.hist.get_untracked();
         let skip = h.len().saturating_sub(20);
+        let recent_user_context = h.iter().rev()
+            .filter(|message| message.role == "user")
+            .take(3)
+            .map(|message| message.content.to_lowercase())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut matched_lorebooks = cfg.lab.lorebooks.iter()
+            .filter(|book| book.enabled)
+            .filter_map(|book| {
+                let score = book.keywords.iter().filter(|keyword| {
+                    let keyword = keyword.trim().to_lowercase();
+                    !keyword.is_empty() && recent_user_context.contains(&keyword)
+                }).count();
+                (score > 0).then_some((score, book))
+            })
+            .collect::<Vec<_>>();
+        matched_lorebooks.sort_by(|a, b| b.0.cmp(&a.0));
+        let lore_context = matched_lorebooks.into_iter()
+            .take(5)
+            .map(|(_, book)| format!("[{}]\n{}", book.name, book.content))
+            .collect::<Vec<_>>()
+            .join("\n\n")
+            .chars().take(8000).collect::<String>();
+        let preset_context = cfg.lab.active_preset.as_ref()
+            .and_then(|id| cfg.lab.presets.iter().find(|preset| &preset.id == id))
+            .map(|preset| preset.instructions.chars().take(2000).collect::<String>())
+            .unwrap_or_default();
         let body = serde_json::json!({
             "msgs": &h[skip..], "chat_id": self.cur.get_untracked(), "name": cfg.name, "who": cfg.who,
-            "rules": cfg.rules, "len": cfg.len, "you": cfg.you, "keep": cfg.keep
+            "rules": cfg.rules, "len": cfg.len, "you": cfg.you, "keep": cfg.keep,
+            "lore_context": lore_context, "preset_context": preset_context
         });
         const ERR: &str = "Не удалось получить ответ. Отправьте сообщение ещё раз.";
 
