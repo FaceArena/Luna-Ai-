@@ -906,12 +906,12 @@ fn PageLab() -> impl IntoView {
                     }.into_view(),
                     "vectors" => view! {
                         <div class="lab-panel">
-                            <div class="lab-heading"><b>"Векторная память"</b><span class="lab-status lab-ready">"Подключена"</span></div>
-                            <p class="hint">"Luna преобразует записи памяти и включённые лорбуки в векторы, а затем ищет подходящий контекст по смыслу сообщения — даже если формулировки отличаются."</p>
-                            <div class="lab-info-row"><span>"Embeddings-модель"</span><b>"Supabase gte-small · 384"</b></div>
+                            <div class="lab-heading"><b>"Векторная память"</b><span class="lab-status">"Английский · активен"</span></div>
+                            <p class="hint">"Для английских записей Luna строит embeddings и ищет совпадения по смыслу. Для русского текста пока используются ключевые слова и правила активации лорбуков."</p>
+                            <div class="lab-info-row"><span>"Embeddings-модель"</span><b>"Supabase gte-small · 384 · EN"</b></div>
                             <div class="lab-info-row"><span>"Векторное хранилище"</span><b>"Postgres pgvector · HNSW"</b></div>
-                            <div class="lab-info-row"><span>"Семантический поиск"</span><b>"До 8 совпадений на запрос"</b></div>
-                            <p class="hint">"Существующие записи памяти индексируются постепенно при обращениях. Новые и изменённые лорбуки индексируются при сохранении. В поиск попадают только данные текущего аккаунта."</p>
+                            <div class="lab-info-row"><span>"Поиск"</span><b>"Смысловой EN · ключевой RU"</b></div>
+                            <p class="hint">"Важно: gte-small обучена только для английского. Я не применяю её к русским текстам, чтобы не выдавать слабые совпадения за семантический поиск. Для полноценного RU/EN-поиска потребуется отдельная мультиязычная модель. Записи и векторы изолированы по аккаунтам."</p>
                         </div>
                     }.into_view(),
                     _ => view! {
