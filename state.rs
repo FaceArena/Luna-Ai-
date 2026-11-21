@@ -484,7 +484,7 @@ impl Ctx {
         let h = self.hist.get_untracked();
         let skip = h.len().saturating_sub(20);
         let body = serde_json::json!({
-            "msgs": &h[skip..], "name": cfg.name, "who": cfg.who,
+            "msgs": &h[skip..], "chat_id": self.cur.get_untracked(), "name": cfg.name, "who": cfg.who,
             "rules": cfg.rules, "len": cfg.len, "you": cfg.you
         });
         const ERR: &str = "Не удалось получить ответ. Отправьте сообщение ещё раз.";
