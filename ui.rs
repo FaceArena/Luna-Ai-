@@ -152,7 +152,7 @@ fn globals(ctx: Ctx) {
                         (el, distance)
                     });
                 let _ = root.style().set_property("--vvh", &format!("{}px", vv.height()));
-                let _ = root.style().set_property("--vvt", "0px");
+                let _ = root.style().set_property("--vvt", &format!("{}px", vv.offset_top()));
                 let layout_h = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(vv.height());
                 let keyboard_open = vv.height() < layout_h - 120.0;
                 let _ = root.class_list().toggle_with_force("keyboard-open", keyboard_open);
@@ -984,21 +984,12 @@ fn Composer() -> impl IntoView {
                               if e.key() == "Enter" && !e.shift_key() && !coarse() { e.prevent_default(); go(); }
                           }
                           on:focus=move |_| {
-                              let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
-                              for delay in [50, 150, 300] {
-                                  set_timeout(move || {
-                                      let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
-                                  }, Duration::from_millis(delay));
-                              }
+                              // Do not scroll the document: Safari resizes the visual viewport.
+                              // The message list remains the only scrollable chat region.
                               request_animation_frame(move || ctx.scroll(false));
                           }
                           on:blur=move |_| {
-                              let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
-                              for delay in [50, 150, 300] {
-                                  set_timeout(move || {
-                                      let _ = window().scroll_to_with_x_and_y(0.0, 0.0);
-                                  }, Duration::from_millis(delay));
-                              }
+                              // #app follows visualViewport resize/scroll events.
                           }></textarea>
                 <button class="glass send" id="send"
                         aria-label=move || if ctx.busy.get() { "Стоп" } else { "Отправить" }
