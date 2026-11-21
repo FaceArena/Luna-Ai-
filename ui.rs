@@ -1410,7 +1410,7 @@ fn Composer() -> impl IntoView {
                    on:change=move |e| {
                        let input = event_target::<web_sys::HtmlInputElement>(&e);
                        let Some(file) = input.files().and_then(|files| files.get(0)) else { return; };
-                       let mime = file.type();
+                       let mime = file.type_();
                        if !["image/jpeg", "image/png", "image/webp"].contains(&mime.as_str()) {
                            ctx.say("Поддерживаются JPG, PNG и WebP.");
                            input.set_value("");
