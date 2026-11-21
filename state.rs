@@ -61,7 +61,7 @@ pub struct Me {
     #[serde(default)]
     pub plan: usize,
     #[serde(default)]
-    pub channel_member: Option<bool>,
+    pub channel_member: bool,
     #[serde(default = "default_prompt_limit")]
     pub prompt_limit: usize,
 }
@@ -70,7 +70,7 @@ pub struct Me {
 pub struct PlanState {
     pub plan: usize,
     #[serde(default)]
-    pub channel_member: bool,
+    pub channel_member: Option<bool>,
     #[serde(default = "default_prompt_limit")]
     pub prompt_limit: usize,
 }
