@@ -403,6 +403,16 @@ body {
   pointer-events: none;
 }
 #app .msg.ai .tx { transition: opacity 180ms ease; }
+#app .dots {
+  display: inline-flex;
+  height: 25px;
+  overflow: hidden;
+  vertical-align: middle;
+  transition: height 180ms ease, opacity 180ms ease;
+}
+#app .dots.leaving { height: 0; opacity: 0; }
+#app .stream-text { opacity: 0; transition: opacity 180ms ease; }
+#app .stream-text.active { opacity: 1; }
 #log { position: relative; }
 #log .jump {
   position: sticky;
