@@ -575,7 +575,7 @@ fn PageProviders() -> impl IntoView {
                                         model.set(row.get("model").and_then(|v| v.as_str()).unwrap_or("openai/gpt-oss-120b").to_string());
                                         configured.set(row.get("configured").and_then(|v| v.as_bool()).unwrap_or(false));
                                     } else {
-                                        model.set(if active == "gemini" { "gemini-2.5-flash" } else { "openai/gpt-oss-120b" }.into());
+                                        model.set(if active == "gemini" { "gemini-3.8-flash" } else { "openai/gpt-oss-120b" }.into());
                                         configured.set(false);
                                     }
                                 }
@@ -593,7 +593,7 @@ fn PageProviders() -> impl IntoView {
 
     let select_provider = move |value: String| {
         provider.set(value.clone());
-        model.set(if value == "gemini" { "gemini-2.5-flash" } else { "openai/gpt-oss-120b" }.into());
+        model.set(if value == "gemini" { "gemini-3.8-flash" } else { "openai/gpt-oss-120b" }.into());
         configured.set(false);
         status.set(String::new());
         spawn_local(async move {
@@ -602,7 +602,7 @@ fn PageProviders() -> impl IntoView {
                     if let Ok(data) = resp.json::<serde_json::Value>().await {
                         if let Some(rows) = data.get("providers").and_then(|v| v.as_array()) {
                             if let Some(row) = rows.iter().find(|row| row.get("provider").and_then(|v| v.as_str()) == Some(value.as_str())) {
-                                model.set(row.get("model").and_then(|v| v.as_str()).unwrap_or(if value == "gemini" { "gemini-2.5-flash" } else { "openai/gpt-oss-120b" }).to_string());
+                                model.set(row.get("model").and_then(|v| v.as_str()).unwrap_or(if value == "gemini" { "gemini-3.8-flash" } else { "openai/gpt-oss-120b" }).to_string());
                                 configured.set(row.get("configured").and_then(|v| v.as_bool()).unwrap_or(false));
                             }
                         }
@@ -682,8 +682,8 @@ fn PageProviders() -> impl IntoView {
                         <option value="openai/gpt-oss-20b">"GPT OSS 20B"</option>
                     </Show>
                     <Show when=move || provider.get() == "gemini">
-                        <option value="gemini-2.5-flash">"Gemini 2.5 Flash"</option>
-                        <option value="gemini-2.5-pro">"Gemini 2.5 Pro"</option>
+                        <option value="gemini-3.8-flash">"Gemini 3.8 Flash"</option>
+                        <option value="gemini-3.5-flash-lite">"Gemini 3.5 Flash-Lite"</option>
                     </Show>
                 </select>
                 <button class="cta" on:click=save_provider>"Сохранить провайдера"</button>
