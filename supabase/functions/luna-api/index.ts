@@ -77,6 +77,23 @@ Deno.serve(async (req: Request) => {
       return json(200, { name, email, plan: 0 }, { "Set-Cookie": sessionCookie(data.session.access_token) });
     }
 
+    if (method === "POST" && path === "/api/verify-email") {
+      const body = await req.json().catch(() => null);
+      const email = typeof body?.email === "string" ? body.email.trim() : "";
+      const code = typeof body?.code === "string" ? body.code.trim() : "";
+      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || !/^\\d{6}$/.test(code)) {
+        return text(400, "Введите корректную почту и шестизначный код.");
+      }
+      const client = createClient(base, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { data, error } = await client.auth.verifyOtp({ email, token: code, type: "signup" });
+      if (error || !data.session || !data.user) {
+        return text(400, "Код неверный или срок его действия истёк. Проверьте письмо и попробуйте ещё раз.");
+      }
+      const name = String(data.user.user_metadata?.name ?? "Luna user");
+      const plan = Math.min(2, Number(data.user.user_metadata?.plan ?? 0) || 0);
+      return json(200, { name, email: data.user.email ?? email, plan }, { "Set-Cookie": sessionCookie(data.session.access_token) });
+    }
+
     if (method === "POST" && path === "/api/login") {
       const body = await req.json().catch(() => null);
       const email = typeof body?.email === "string" ? body.email.trim() : "";
