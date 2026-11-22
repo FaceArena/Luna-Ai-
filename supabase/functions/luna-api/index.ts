@@ -241,7 +241,7 @@ async function saveRoleplayMemory(client: any, userId: string, chatId: number, k
     usage.prompt_tokens = Math.max(0, Number(payload?.usage?.prompt_tokens) || 0);
     usage.completion_tokens = Math.max(0, Number(payload?.usage?.completion_tokens) || 0);
     const raw = payload?.choices?.[0]?.message?.content;
-    if (typeof raw !== "string") return;
+    if (typeof raw !== "string") return usage;
     const parsed = JSON.parse(raw);
     const candidates = Array.isArray(parsed.memories) ? parsed.memories.slice(0, 6) : [];
     for (const item of candidates) {
