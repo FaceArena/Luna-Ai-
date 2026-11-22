@@ -1138,7 +1138,10 @@ fn Log() -> impl IntoView {
     });
     create_effect(move |_| {
         let stream_now = ctx.stream.get();
-        if stream_now.is_some() && near_bottom.get_untracked() {
+        if stream_now.is_some() {
+            // Keep the newest generated line visible throughout the typing animation.
+            near_bottom.set(true);
+            show_jump.set(false);
             scroll_bottom(false);
         }
     });
