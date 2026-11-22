@@ -726,14 +726,6 @@ impl Ctx {
             let mut stream = wasm_streams::ReadableStream::from_raw(raw.unchecked_into()).into_stream();
             let mut buf: Vec<u8> = Vec::new();
             let mut shown = 0usize;
-            const CHUNKS: [usize; 6] = [3, 4, 4, 5, 3, 4];
-
-            // Печать начинается через 450 мс после появления пузыря с точками.
-            gloo_timers::future::TimeoutFuture::new(450).await;
-            if self.run.get_value() != my {
-                return;
-            }
-
             while let Some(chunk) = stream.next().await {
                 if self.run.get_value() != my {
                     return;
@@ -752,12 +744,13 @@ impl Ctx {
                     if self.run.get_value() != my {
                         return;
                     }
-                    // Чем больше непоказанного текста, тем крупнее шаг: длинный ответ не печатается минутами.
-                    let step = CHUNKS[shown % CHUNKS.len()] + ((chars.len() - shown) / 60).min(30);
+                    // Сохраняем постепенное раскрытие, но убираем искусственную долгую печать.
+                    let remaining = chars.len() - shown;
+                    let step = 16 + (remaining / 24).min(48);
                     shown = (shown + step).min(chars.len());
                     let visible: String = chars[..shown].iter().collect();
                     self.stream.set(Some(visible));
-                    gloo_timers::future::TimeoutFuture::new(60).await;
+                    gloo_timers::future::TimeoutFuture::new(18).await;
                 }
             }
             if self.run.get_value() != my {
