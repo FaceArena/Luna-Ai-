@@ -255,6 +255,12 @@ impl Ctx {
         create_effect(move |_| {
             let c = self.cfg.get();
             if c.theme == "auto" || c.theme == "black" {
+                // Старая «полностью чёрная» тема теперь палитра «Абсолютно чёрная»: сохраняем внешний вид.
+                if c.theme == "black" {
+                    if let Some(i) = data().pal.iter().position(|p| p.n == "Абсолютно чёрная") {
+                        self.set_pal(i);
+                    }
+                }
                 self.cfg.update(|cfg| cfg.theme = "dark".into());
                 return;
             }
@@ -282,11 +288,13 @@ impl Ctx {
         let r = root.clone();
         create_effect(move |_| {
             let p = &data().pal[self.pal.get()];
+            let light = self.cfg.with(|c| c.theme == "light");
             let st = r.style();
             let _ = st.set_property("--a", &p.a);
             let _ = st.set_property("--b", &p.b);
             let _ = st.set_property("--c", &p.c);
-            if p.n == "Абсолютно чёрная" {
+            // В светлой теме чёрный фон оставил бы тёмный текст на чёрном, поэтому там палитра только красит акценты.
+            if p.n == "Абсолютно чёрная" && !light {
                 let _ = st.set_property("--bg", "#000");
                 let _ = st.set_property("--glass", "rgba(255,255,255,.045)");
                 let _ = st.set_property("--glass2", "rgba(255,255,255,.085)");
@@ -623,7 +631,6 @@ impl Ctx {
         self.hist.update(|h| h.push(Msg { role: "user".into(), content: t }));
         self.busy.set(true);
         self.stream.set(Some(String::new()));
-        self.scroll(true);
 
         let my = self.run.get_value() + 1;
         self.run.set_value(my);
@@ -711,7 +718,7 @@ impl Ctx {
             let mut shown = 0usize;
             const CHUNKS: [usize; 6] = [3, 4, 4, 5, 3, 4];
 
-            // Start the typing phase one second after the reply bubble appears.
+            // Печать начинается через 450 мс после появления пузыря с точками.
             gloo_timers::future::TimeoutFuture::new(450).await;
             if self.run.get_value() != my {
                 return;
@@ -735,7 +742,9 @@ impl Ctx {
                     if self.run.get_value() != my {
                         return;
                     }
-                    shown = (shown + CHUNKS[shown % CHUNKS.len()]).min(chars.len());
+                    // Чем больше непоказанного текста, тем крупнее шаг: длинный ответ не печатается минутами.
+                    let step = CHUNKS[shown % CHUNKS.len()] + ((chars.len() - shown) / 60).min(30);
+                    shown = (shown + step).min(chars.len());
                     let visible: String = chars[..shown].iter().collect();
                     self.stream.set(Some(visible));
                     gloo_timers::future::TimeoutFuture::new(60).await;
@@ -769,6 +778,12 @@ impl Ctx {
             self.push_ai("", part, 0);
             self.persist();
         } else {
+            // Ответа нет: убираем из истории вопрос без ответа, иначе дальше пойдут два user-сообщения подряд.
+            self.hist.update(|h| {
+                if h.last().map_or(false, |m| m.role == "user") {
+                    h.pop();
+                }
+            });
             self.stream.set(None);
             self.busy.set(false);
         }
