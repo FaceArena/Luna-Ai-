@@ -256,14 +256,14 @@ fn PalPop() -> impl IntoView {
     let ctx = expect_context::<Ctx>();
     let pal_ref = create_node_ref::<html::Div>();
     let held = create_rw_signal(false);
-    let lx = create_rw_signal(6.0f64);
+    let lx = create_rw_signal(5.0f64);
     let n = data().pal.len();
 
     let mv = move |e: web_sys::PointerEvent| {
         if let Some(el) = pal_ref.get_untracked() {
             let x = e.client_x() as f64 - el.get_bounding_client_rect().left();
-            lx.set((x - 22.0).clamp(6.0, 6.0 + (n - 1) as f64 * 50.0));
-            let i = (((x - 6.0) / 50.0).floor().max(0.0) as usize).min(n - 1);
+            lx.set((x - 16.0).clamp(5.0, 5.0 + (n - 1) as f64 * 36.0));
+            let i = (((x - 5.0) / 36.0).floor().max(0.0) as usize).min(n - 1);
             if i != ctx.pal.get_untracked() {
                 ctx.set_pal(i);
             }
@@ -285,7 +285,7 @@ fn PalPop() -> impl IntoView {
                 <div class="sw" class:sel=move || ctx.pal.get() == i role="radio"
                      style=format!("--s1:{};--s2:{};--s3:{}", p.a, p.b, p.c)></div>
             }).collect_view()}
-            <div class="lens" style:left=move || format!("{}px", if held.get() { lx.get() } else { 6.0 + ctx.pal.get() as f64 * 50.0 })></div>
+            <div class="lens" style:left=move || format!("{}px", if held.get() { lx.get() } else { 5.0 + ctx.pal.get() as f64 * 36.0 })></div>
             <div class="pname">{move || data().pal[ctx.pal.get()].n.clone()}</div>
         </div>
     }

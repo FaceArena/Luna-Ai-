@@ -4,7 +4,7 @@
 @property --c{syntax:'<color>';inherits:true;initial-value:#2fb8ff}
 :root{
   --a:#14224f;--b:#3858c8;--c:#060b1f;
-  --bg:#07070c;--fg:#f2f2f7;--fg2:rgba(242,242,247,.58);
+  --bg:#07070c;--edge-bottom:color-mix(in srgb,var(--c) 40%,var(--bg));--fg:#f2f2f7;--fg2:rgba(242,242,247,.58);
   --glass:rgba(255,255,255,.075);--glass2:rgba(255,255,255,.14);--edge:rgba(255,255,255,.28);--shadow:rgba(0,0,0,.45);
   --spring:cubic-bezier(.34,1.56,.64,1);--ease:cubic-bezier(.22,1,.36,1);--gl:1;
   transition:--a 1.1s var(--ease),--b 1.1s var(--ease),--c 1.1s var(--ease);
@@ -16,7 +16,7 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{background:var(--bg);color:var(--fg);font:400 var(--fs,16px)/1.5 'Onest',system-ui,-apple-system,'Segoe UI',sans-serif}
 /* animated backdrop */
-.bg{position:fixed;inset:0;overflow:hidden;z-index:0}
+.bg{position:fixed;inset:0;bottom:-120px;overflow:hidden;z-index:0}
 .bg i{position:absolute;width:90vmax;height:90vmax;border-radius:50%;opacity:.62;will-change:transform;background:radial-gradient(circle,var(--blob) 0,transparent 68%)}
 .bg i:nth-child(1){--blob:var(--a);left:-35vmax;top:-30vmax;animation:d1 55s ease-in-out infinite alternate}
 .bg i:nth-child(2){--blob:var(--b);opacity:.5;right:-45vmax;top:15vh;animation:d2 65s ease-in-out infinite alternate}
@@ -53,16 +53,16 @@ header{position:relative;z-index:5;display:flex;align-items:center;gap:10px;padd
 .ib svg{width:21px;height:21px;fill:none;stroke:var(--fg);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .orb{width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--a),var(--b) 55%,var(--c));box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55),0 0 14px -2px var(--b)}
 /* palette lens */
-.pal{position:absolute;z-index:10;top:62px;right:14px;display:flex;gap:6px;padding:6px;border-radius:30px;touch-action:none;user-select:none;-webkit-user-select:none;
+.pal{position:absolute;z-index:10;top:calc(env(safe-area-inset-top, 0px) + 58px);right:12px;display:flex;gap:4px;padding:5px;border-radius:24px;max-width:calc(100vw - 24px);touch-action:none;user-select:none;-webkit-user-select:none;
   transform-origin:90% 0;transform:scale(.6) translateY(-10px);opacity:0;pointer-events:none;transition:transform .55s var(--spring),opacity .25s}
 .pal.on{transform:none;opacity:1;pointer-events:auto}
-.pal .sw{width:44px;height:44px;border-radius:50%;position:relative;z-index:2;background:linear-gradient(135deg,var(--s1),var(--s2) 55%,var(--s3));box-shadow:inset 0 0 0 1px rgba(255,255,255,.4);transform:scale(.62);transition:transform .45s var(--spring)}
-.pal .sw.sel{transform:scale(.8)}
-.lens{position:absolute;z-index:1;top:6px;left:6px;width:44px;height:44px;border-radius:26px;pointer-events:none;
+.pal .sw{width:32px;height:32px;border-radius:50%;position:relative;z-index:2;background:linear-gradient(135deg,var(--s1),var(--s2) 55%,var(--s3));box-shadow:inset 0 0 0 1px rgba(255,255,255,.4);transform:scale(.7);transition:transform .45s var(--spring)}
+.pal .sw.sel{transform:scale(.9)}
+.lens{position:absolute;z-index:1;top:5px;left:5px;width:32px;height:32px;border-radius:20px;pointer-events:none;
   background:linear-gradient(180deg,rgba(255,255,255,.36),rgba(255,255,255,.18));
   box-shadow:inset 0 1.5px 0 rgba(255,255,255,.8),inset 0 0 0 1px rgba(255,255,255,.35),inset 0 -8px 14px rgba(255,255,255,.12),0 8px 22px -6px rgba(0,0,0,.5);
   transition:transform .6s var(--spring),left .6s var(--spring)}
-.pal.held .lens{transform:scale(1.28,1.5);transition:transform .45s var(--spring),left 0s}
+.pal.held .lens{transform:scale(1.18,1.3);transition:transform .45s var(--spring),left 0s}
 .pname{position:absolute;left:0;right:0;top:calc(100% + 8px);text-align:center;font-size:13px;font-weight:500;color:var(--fg);text-shadow:0 1px 8px rgba(0,0,0,.35);pointer-events:none}
 .pal.glass{overflow:visible}
 .pal.glass,.msh.glass{background:color-mix(in srgb,color-mix(in srgb,var(--b) 30%,var(--bg)) calc(100% - 22%*var(--gl)),transparent)}
@@ -192,7 +192,7 @@ textarea::placeholder{color:var(--fg2)}
 @keyframes tw{from{opacity:var(--o1);transform:translateY(0)}to{opacity:var(--o2);transform:translateY(-9px)}}
 .rb .g,.rb .w{stroke-width:2}
 .plan{cursor:pointer}
-body{transition:background-color .5s,color .5s}
+body{transition:none}
 textarea,.fi{font-size:max(16px,var(--fs,16px))}
 .mc.pro.sel .lk{stroke:var(--fg)}
 .avt{width:54px;height:54px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:22px;font-weight:600;color:#fff;background:linear-gradient(135deg,var(--a),var(--b));box-shadow:inset 0 1px 0 rgba(255,255,255,.5)}
@@ -317,7 +317,7 @@ html, body {
   margin: 0;
   overflow: hidden;
   overscroll-behavior: none;
-  background: var(--c, var(--bg));
+  background-color: var(--edge-bottom);
 }
 body { display: block; }
 #app {
@@ -369,8 +369,7 @@ html.keyboard-open #app {
   margin-top: auto;
   padding: 6px 12px calc(8px + env(safe-area-inset-bottom, 0px));
 }
-#shell > footer:focus-within,
-html.keyboard-open #shell > footer { padding-bottom: 8px; }
+html:has(#inp:focus) #shell > footer { padding-bottom: 8px !important; }
 #app textarea, #app input, #app select, #app .fi {
   min-height: 16px;
   font-size: max(16px, var(--fs, 16px));
@@ -797,7 +796,7 @@ html, body {
 /* Pure black theme: no blue ambient glow or tinted surfaces. */
 :root[data-theme="black"]{
   --a:#171717;--b:#353535;--c:#000;
-  --bg:#000;--fg:#f5f5f5;--fg2:rgba(245,245,245,.58);
+  --bg:#000;--edge-bottom:#000;--fg:#f5f5f5;--fg2:rgba(245,245,245,.58);
   --glass:rgba(255,255,255,.045);--glass2:rgba(255,255,255,.085);
   --edge:rgba(255,255,255,.13);--shadow:rgba(0,0,0,.9);
   color-scheme:dark;
@@ -812,9 +811,9 @@ html, body {
 
 
 /* Compact chat layout while the iOS keyboard is visible. */
-html.keyboard-open #hd { padding-top: 4px; padding-bottom: 4px; }
-html.keyboard-open #hd .ib { width: 38px; height: 38px; }
-html.keyboard-open .empty .big.glass { width: 72px; height: 72px; }
-html.keyboard-open .empty .big .rb { width: 52px; height: 52px; }
-html.keyboard-open .empty p { display: none; }
-html.keyboard-open #shell > main { padding-top: 8px; padding-bottom: 8px; }
+html:has(#inp:focus) #hd { padding-top: 4px; padding-bottom: 4px; }
+html:has(#inp:focus) #hd .ib { width: 38px; height: 38px; }
+html:has(#inp:focus) .empty .big.glass { width: 76px; height: 76px; }
+html:has(#inp:focus) .empty .big .rb { width: 54px; height: 54px; }
+html:has(#inp:focus) .empty p { display: none; }
+html:has(#inp:focus) #shell > main { padding-top: 8px; padding-bottom: 8px; }
