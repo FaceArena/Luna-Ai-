@@ -317,7 +317,7 @@ html, body {
   margin: 0;
   overflow: hidden;
   overscroll-behavior: none;
-  background-color: var(--bg);
+  background-color: var(--edge-bottom, var(--bg));
 }
 body { display: block; }
 #app {
@@ -421,12 +421,11 @@ html:has(#inp:focus) #shell > footer { padding-bottom: 8px !important; }
 /* Soft per-character reveal for live AI replies. Existing characters stay still. */
 #app .stream-char {
   display: inline;
-  animation: streamCharIn 220ms cubic-bezier(.22, 1, .36, 1) both;
-  will-change: opacity, transform, filter;
+  animation: streamCharIn 180ms ease-out both;
 }
 @keyframes streamCharIn {
-  from { opacity: 0; transform: translateY(.2em); filter: blur(1.5px); }
-  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 #log { position: relative; }
 #messages-content {
@@ -817,3 +816,6 @@ html:has(#inp:focus) .empty .big.glass { width: 76px; height: 76px; }
 html:has(#inp:focus) .empty .big .rb { width: 54px; height: 54px; }
 html:has(#inp:focus) .empty p { display: none; }
 html:has(#inp:focus) #shell > main { padding-top: 8px; padding-bottom: 8px; }
+
+/* Цвет за краем контента (iOS закрашивает им область вне страницы): совпадает с низом градиента и меняется синхронно с палитрой. */
+:root { --edge-bottom: color-mix(in srgb, var(--c) 40%, var(--bg)); }
