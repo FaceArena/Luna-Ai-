@@ -726,9 +726,10 @@ impl Ctx {
             let mut stream = wasm_streams::ReadableStream::from_raw(raw.unchecked_into()).into_stream();
             let mut buf: Vec<u8> = Vec::new();
             let mut shown = 0usize;
-            const CHUNKS: [usize; 6] = [8, 10, 12, 14, 16, 18];
+            const CHUNKS: [usize; 6] = [3, 4, 4, 5, 3, 4];
 
-            // Начинаем показывать ответ сразу после получения первого сетевого фрагмента.
+            // Печать начинается через 450 мс после появления пузыря с точками.
+            gloo_timers::future::TimeoutFuture::new(450).await;
             if self.run.get_value() != my {
                 return;
             }
@@ -756,7 +757,7 @@ impl Ctx {
                     shown = (shown + step).min(chars.len());
                     let visible: String = chars[..shown].iter().collect();
                     self.stream.set(Some(visible));
-                    gloo_timers::future::TimeoutFuture::new(20).await;
+                    gloo_timers::future::TimeoutFuture::new(60).await;
                 }
             }
             if self.run.get_value() != my {
