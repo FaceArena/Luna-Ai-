@@ -148,7 +148,7 @@ fn globals(ctx: Ctx) {
                 let height = vv.height().max(1.0);
                 let offset_top = vv.offset_top().max(0.0);
                 let layout_h = window().inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(height);
-                let input_focused = document().active_element().map_or(false, |el| el.id() == "inp");
+                let input_focused = document().active_element().map_or(false, |el| matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA"));
                 let keyboard_open = input_focused && height < layout_h - 80.0;
                 let was_at_bottom = document().get_element_by_id("log").map_or(true, |el| {
                     el.scroll_height() - el.scroll_top() - el.client_height() <= 80
@@ -1115,8 +1115,12 @@ fn Log() -> impl IntoView {
     });
     let last_ai_id = create_memo(move |_| ctx.log.with(|l| l.iter().rev().find(|r| !r.user).map(|r| r.id)));
     let log_el = ctx.log_el;
+    // near_bottom = лента прижата к низу. Пока true, любой рост пузыря догоняется прокруткой.
+    // Сбрасывается только когда пользователь сам потянул ленту вверх.
     let near_bottom = create_rw_signal(true);
     let show_jump = create_rw_signal(false);
+    let last_top = store_value(0i32);
+    let first_id = store_value(None::<u64>);
     let scroll_bottom = move |smooth: bool| {
         request_animation_frame(move || {
             if let Some(el) = log_el.get_untracked() {
@@ -1128,7 +1132,12 @@ fn Log() -> impl IntoView {
         });
     };
     create_effect(move |_| {
-        let _ = ctx.log.get();
+        let (first, last_is_user) = ctx.log.with(|l| (l.first().map(|r| r.id), l.last().map_or(false, |r| r.user)));
+        // Своё сообщение или переход в другой чат: всегда показываем низ ленты.
+        if last_is_user || first_id.get_value() != first {
+            near_bottom.set(true);
+        }
+        first_id.set_value(first);
         if near_bottom.get_untracked() {
             show_jump.set(false);
             scroll_bottom(false);
@@ -1137,11 +1146,9 @@ fn Log() -> impl IntoView {
         }
     });
     create_effect(move |_| {
-        let stream_now = ctx.stream.get();
-        if stream_now.is_some() {
-            // Keep the newest generated line visible throughout the typing animation.
-            near_bottom.set(true);
-            show_jump.set(false);
+        // Пока печатается ответ, пузырь растёт вниз, а лента следует за последней строкой.
+        // Если пользователь сам прокрутил вверх, его не тянет обратно (там покажется кнопка «↓»).
+        if ctx.stream.with(|s| s.is_some()) && near_bottom.get_untracked() {
             scroll_bottom(false);
         }
     });
@@ -1157,10 +1164,18 @@ fn Log() -> impl IntoView {
               }
               on:scroll=move |_| {
                   if let Some(el) = log_el.get_untracked() {
-                      let distance = el.scroll_height() - el.scroll_top() - el.client_height();
-                      let at_bottom = distance <= 80;
-                      near_bottom.set(at_bottom);
-                      show_jump.set(!at_bottom);
+                      let top = el.scroll_top();
+                      let distance = el.scroll_height() - top - el.client_height();
+                      // «вверх» = scrollTop уменьшился. Рост пузыря и наша же прокрутка вниз так не выглядят.
+                      let moved_up = top < last_top.get_value() - 1;
+                      last_top.set_value(top);
+                      if distance <= 80 {
+                          near_bottom.set(true);
+                          show_jump.set(false);
+                      } else if moved_up {
+                          near_bottom.set(false);
+                          show_jump.set(true);
+                      }
                   }
               }>
             <div id="messages-content">
