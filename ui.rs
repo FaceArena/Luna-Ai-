@@ -1270,9 +1270,8 @@ fn Composer() -> impl IntoView {
                               if e.key() == "Enter" && !e.shift_key() && !coarse() { e.prevent_default(); go(); }
                           }
                           on:focus=move |_| {
-                              // Do not scroll the document: Safari resizes the visual viewport.
-                              // The message list remains the only scrollable chat region.
-                              request_animation_frame(move || ctx.scroll(false));
+                              // Не прокручиваем историю при фокусе ввода: на iOS открытие клавиатуры
+                              // меняет visual viewport, и принудительный scroll-to-bottom прячет ответ.
                           }
                           on:blur=move |_| {
                               // #app follows visualViewport resize/scroll events.
