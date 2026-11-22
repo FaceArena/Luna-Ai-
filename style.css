@@ -13,7 +13,6 @@
 }
 :root[data-theme="light"]{--bg:#eef0f7;--fg:#14141c;--fg2:rgba(20,20,28,.58);--glass:rgba(255,255,255,.5);--glass2:rgba(255,255,255,.8);--edge:rgba(255,255,255,.95);--shadow:rgba(40,40,80,.18);color-scheme:light}
 :root[data-theme="dark"]{--bg:#07070c;--fg:#f2f2f7;--fg2:rgba(242,242,247,.58);--glass:rgba(255,255,255,.075);--glass2:rgba(255,255,255,.14);--edge:rgba(255,255,255,.28);--shadow:rgba(0,0,0,.45)}
-html, body { background-color: var(--edge-bottom); }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{background:var(--bg);color:var(--fg);font:400 var(--fs,16px)/1.5 'Onest',system-ui,-apple-system,'Segoe UI',sans-serif}
 /* animated backdrop */
