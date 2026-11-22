@@ -356,8 +356,8 @@ impl Ctx {
                         self.mi.set(plan);
                         self.model_preview.set(plan);
                         ls_set("luna-model2", &plan.to_string());
+                        self.me.set(Some(me));
                     }
-                    self.me.set(Some(me));
                 }
             });
         };
