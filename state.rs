@@ -190,6 +190,7 @@ pub struct Ctx {
     pub model_preview: RwSignal<usize>,
     pub busy: RwSignal<bool>,
     pub plan_busy: RwSignal<bool>,
+    model_revision: StoredValue<u64>,
     pub me: RwSignal<Option<Me>>,
     pub chats: RwSignal<Vec<Chat>>,
     pub cur: RwSignal<Option<i64>>,
@@ -225,6 +226,7 @@ impl Ctx {
             model_preview: create_rw_signal(mi),
             busy: create_rw_signal(false),
             plan_busy: create_rw_signal(false),
+            model_revision: store_value(0),
             me: create_rw_signal(None),
             chats: create_rw_signal(vec![]),
             cur: create_rw_signal(None),
@@ -345,12 +347,16 @@ impl Ctx {
         // after opening Telegram to leave or re-join the channel).
         let refresh_subscription = move || {
             if self.me.get_untracked().is_none() { return; }
+            // Не позволяем запоздавшему /api/me перезаписать выбор, сделанный после старта запроса.
+            let revision = self.model_revision.get_value();
             spawn_local(async move {
                 if let Some(me) = api::me().await {
-                    let plan = me.plan.min(2);
-                    self.mi.set(plan);
-                    self.model_preview.set(plan);
-                    ls_set("luna-model2", &plan.to_string());
+                    if self.model_revision.get_value() == revision && !self.plan_busy.get_untracked() {
+                        let plan = me.plan.min(2);
+                        self.mi.set(plan);
+                        self.model_preview.set(plan);
+                        ls_set("luna-model2", &plan.to_string());
+                    }
                     self.me.set(Some(me));
                 }
             });
@@ -405,6 +411,8 @@ impl Ctx {
             return;
         };
 
+        // Каждое изменение выбора инвалидирует ранее запущенные запросы /api/me.
+        self.model_revision.update_value(|revision| *revision += 1);
         // Optimistic UI: switch immediately, then reconcile with the server.
         // The plan endpoint returns the verified membership in the same request.
         let previous = self.mi.get_untracked();
@@ -440,6 +448,8 @@ impl Ctx {
                     self.say(notice);
                 }
             }
+            // Инвалидируем и те /api/me, которые стартовали во время сохранения тарифа.
+            self.model_revision.update_value(|revision| *revision += 1);
             self.plan_busy.set(false);
         });
     }
