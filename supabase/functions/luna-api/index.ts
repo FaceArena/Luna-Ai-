@@ -583,6 +583,35 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (method === "GET" && path === "/api/usage") {
+      const subscription = await resolveSubscription(admin, user);
+      if (subscription.error || !subscription.verified) {
+        return text(503, "Не удалось подтвердить тариф. Попробуйте позже.");
+      }
+      const limits = tierLimits(subscription.tier);
+      const usageDate = new Date().toISOString().slice(0, 10);
+      const { data: usage, error: usageError } = await admin.from("luna_ai_usage")
+        .select("request_count,prompt_tokens,completion_tokens")
+        .eq("user_id", user.id).eq("usage_date", usageDate).maybeSingle();
+      if (usageError) return text(502, "Не удалось загрузить статистику использования.");
+      const used = Number(usage?.request_count ?? 0);
+      const promptTokens = Number(usage?.prompt_tokens ?? 0);
+      const completionTokens = Number(usage?.completion_tokens ?? 0);
+      const reset = new Date();
+      reset.setUTCHours(24, 0, 0, 0);
+      return json(200, {
+        tier: subscription.tier,
+        requests_used: used,
+        daily_limit: limits.requestsPerDay,
+        requests_remaining: Math.max(0, limits.requestsPerDay - used),
+        requests_per_minute: limits.requestsPerMinute,
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        total_tokens: promptTokens + completionTokens,
+        resets_at: reset.toISOString(),
+      });
+    }
+
     if (path === "/api/personal-settings" && method === "GET") {
       const { data, error } = await userClient.from("luna_personal_settings")
         .select("settings").eq("user_id", user.id).maybeSingle();
@@ -867,6 +896,12 @@ Deno.serve(async (req: Request) => {
       const effectiveUser = { ...user, app_metadata: { ...(user.app_metadata ?? {}), subscription_tier: subscription.tier } };
       const limit = promptLimit(effectiveUser);
       if (words > limit) return json(402, { error: "Лимит слов в персональных инструкциях превышен.", words, limit });
+      const { data: apiKey, error: keyError } = await admin.rpc("luna_get_global_secret", {
+        p_name: "luna_global_groq_api_key",
+      });
+      if (keyError || typeof apiKey !== "string" || !apiKey) {
+        return text(503, "AI-сервис временно недоступен. Попробуйте позже.");
+      }
       const { data: quotaData, error: quotaError } = await admin.rpc("luna_reserve_ai_request", {
         p_user_id: user.id,
         p_tier: subscription.tier,
@@ -890,12 +925,6 @@ Deno.serve(async (req: Request) => {
           error: "Слишком частые сообщения. Подождите немного.",
           retry_after_seconds: quota.retry_after_seconds ?? 5,
         }, { "Retry-After": String(quota.retry_after_seconds ?? 5) });
-      }
-      const { data: apiKey, error: keyError } = await admin.rpc("luna_get_global_secret", {
-        p_name: "luna_global_groq_api_key",
-      });
-      if (keyError || typeof apiKey !== "string" || !apiKey) {
-        return text(503, "AI-сервис временно недоступен. Попробуйте позже.");
       }
       const model = "openai/gpt-oss-120b";
       const persona = String(body.who ?? "").trim().slice(0, 12000);
