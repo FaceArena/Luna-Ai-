@@ -31,7 +31,6 @@ function sessionCookie(token: string) {
   return `luna_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=3600`;
 }
 const clearCookie = "luna_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0";
-const chatRateLimits = new Map<string, number[]>();
 const promptWordCount = (value: unknown) =>
   typeof value === "string" && value.trim()
     ? value.trim().split(/\s+/u).filter(Boolean).length
@@ -230,16 +229,19 @@ async function saveRoleplayMemory(client: any, userId: string, chatId: number, k
     ].join("\n") },
     { role: "user", content: JSON.stringify({ messages: messages.slice(-10), latest_assistant_reply: answer.slice(0, 5000) }) }
   ];
+  const usage = { prompt_tokens: 0, completion_tokens: 0 };
   try {
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model, messages: extractionMessages, temperature: 0.1, max_tokens: 1400, response_format: { type: "json_object" } })
     });
-    if (!response.ok) return;
+    if (!response.ok) return usage;
     const payload = await response.json();
+    usage.prompt_tokens = Math.max(0, Number(payload?.usage?.prompt_tokens) || 0);
+    usage.completion_tokens = Math.max(0, Number(payload?.usage?.completion_tokens) || 0);
     const raw = payload?.choices?.[0]?.message?.content;
-    if (typeof raw !== "string") return;
+    if (typeof raw !== "string") return usage;
     const parsed = JSON.parse(raw);
     const candidates = Array.isArray(parsed.memories) ? parsed.memories.slice(0, 6) : [];
     for (const item of candidates) {
@@ -283,8 +285,10 @@ async function saveRoleplayMemory(client: any, userId: string, chatId: number, k
       open_threads: Array.isArray(parsed.open_threads) ? parsed.open_threads.slice(0, 12).map((x: unknown) => memoryText(x, 400)).filter(Boolean) : [],
       updated_at: new Date().toISOString()
     }, { onConflict: "user_id,chat_id" });
+    return usage;
   } catch (error) {
     console.error("luna memory update failed", error instanceof Error ? error.message : "unknown");
+    return usage;
   }
 }
 
@@ -434,17 +438,17 @@ async function resolveSubscription(admin: any, user: any, requestedPlan?: number
 }
 function tierLimits(tier: SubscriptionTier) {
   if (tier === "luna_pro") return {
-    requestsPerMinute: 12, maxMessages: 20, maxMessageChars: 16000,
+    requestsPerMinute: 45, requestsPerDay: 2000, maxMessages: 60, maxMessageChars: 16000,
     memoryRows: 100, memoryCount: 40, memoryChars: 9000,
     maxCompletionTokens: 4096, reasoningEffort: "high" as const,
   };
   if (tier === "luna") return {
-    requestsPerMinute: 12, maxMessages: 20, maxMessageChars: 16000,
+    requestsPerMinute: 30, requestsPerDay: 600, maxMessages: 40, maxMessageChars: 16000,
     memoryRows: 75, memoryCount: 30, memoryChars: 6000,
     maxCompletionTokens: 2400, reasoningEffort: "medium" as const,
   };
   return {
-    requestsPerMinute: 6, maxMessages: 12, maxMessageChars: 10000,
+    requestsPerMinute: 20, requestsPerDay: 100, maxMessages: 24, maxMessageChars: 10000,
     memoryRows: 30, memoryCount: 15, memoryChars: 3000,
     maxCompletionTokens: 1400, reasoningEffort: "low" as const,
   };
@@ -576,6 +580,35 @@ Deno.serve(async (req: Request) => {
         plan: subscription.plan,
         channel_member: channelMember,
         prompt_limit: promptLimit(effectiveUser),
+      });
+    }
+
+    if (method === "GET" && path === "/api/usage") {
+      const subscription = await resolveSubscription(admin, user);
+      if (subscription.error || !subscription.verified) {
+        return text(503, "Не удалось подтвердить тариф. Попробуйте позже.");
+      }
+      const limits = tierLimits(subscription.tier);
+      const usageDate = new Date().toISOString().slice(0, 10);
+      const { data: usage, error: usageError } = await admin.from("luna_ai_usage")
+        .select("request_count,prompt_tokens,completion_tokens")
+        .eq("user_id", user.id).eq("usage_date", usageDate).maybeSingle();
+      if (usageError) return text(502, "Не удалось загрузить статистику использования.");
+      const used = Number(usage?.request_count ?? 0);
+      const promptTokens = Number(usage?.prompt_tokens ?? 0);
+      const completionTokens = Number(usage?.completion_tokens ?? 0);
+      const reset = new Date();
+      reset.setUTCHours(24, 0, 0, 0);
+      return json(200, {
+        tier: subscription.tier,
+        requests_used: used,
+        daily_limit: limits.requestsPerDay,
+        requests_remaining: Math.max(0, limits.requestsPerDay - used),
+        requests_per_minute: limits.requestsPerMinute,
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        total_tokens: promptTokens + completionTokens,
+        resets_at: reset.toISOString(),
       });
     }
 
@@ -773,11 +806,6 @@ Deno.serve(async (req: Request) => {
         return text(503, "Не удалось подтвердить подписку на Telegram-канал. Платный доступ временно заблокирован.");
       }
       const limits = tierLimits(subscription.tier);
-      const now = Date.now();
-      const recent = (chatRateLimits.get(user.id) ?? []).filter((at) => now - at < 60_000);
-      if (recent.length >= limits.requestsPerMinute) return text(429, "Слишком много сообщений. Подождите минуту.");
-      recent.push(now);
-      chatRateLimits.set(user.id, recent);
       const body = await req.json();
       const messages = Array.isArray(body.msgs) ? body.msgs : [];
       if (!messages.length || messages.length > limits.maxMessages || messages.some((m: any) =>
@@ -874,6 +902,30 @@ Deno.serve(async (req: Request) => {
       if (keyError || typeof apiKey !== "string" || !apiKey) {
         return text(503, "AI-сервис временно недоступен. Попробуйте позже.");
       }
+      const { data: quotaData, error: quotaError } = await admin.rpc("luna_reserve_ai_request", {
+        p_user_id: user.id,
+        p_tier: subscription.tier,
+        p_requests_per_minute: limits.requestsPerMinute,
+      });
+      if (quotaError || !quotaData || typeof quotaData !== "object") {
+        console.error("luna quota reservation failed", quotaError?.message ?? "invalid quota response");
+        return text(503, "Не удалось проверить лимит запросов. Попробуйте позже.");
+      }
+      const quota = quotaData as any;
+      if (quota.allowed !== true) {
+        if (quota.reason === "daily") {
+          return json(429, {
+            error: "Дневной лимит сообщений исчерпан.",
+            requests_used: quota.requests_used,
+            daily_limit: quota.daily_limit,
+            resets_at: quota.resets_at,
+          }, { "Retry-After": String(quota.retry_after_seconds ?? 60) });
+        }
+        return json(429, {
+          error: "Слишком частые сообщения. Подождите немного.",
+          retry_after_seconds: quota.retry_after_seconds ?? 5,
+        }, { "Retry-After": String(quota.retry_after_seconds ?? 5) });
+      }
       const model = "openai/gpt-oss-120b";
       const persona = String(body.who ?? "").trim().slice(0, 12000);
       const customRules = String(body.rules ?? "").trim().slice(0, 18000);
@@ -938,7 +990,16 @@ Deno.serve(async (req: Request) => {
       const answer = result?.choices?.[0]?.message?.content;
       if (typeof answer !== "string") return text(502, "Не удалось сформировать ответ.");
       const publicAnswer = protectPublicIdentity(answer);
-      await saveRoleplayMemory(userClient, user.id, chatId, keepChat, model, apiKey, messages, publicAnswer);
+      const memoryUsage = await saveRoleplayMemory(userClient, user.id, chatId, keepChat, model, apiKey, messages, publicAnswer);
+      const promptTokens = Math.max(0, Number(result?.usage?.prompt_tokens) || 0) + memoryUsage.prompt_tokens;
+      const completionTokens = Math.max(0, Number(result?.usage?.completion_tokens) || 0) + memoryUsage.completion_tokens;
+      const { error: usageRecordError } = await admin.rpc("luna_record_ai_tokens", {
+        p_user_id: user.id,
+        p_usage_date: quota.usage_date,
+        p_prompt_tokens: promptTokens,
+        p_completion_tokens: completionTokens,
+      });
+      if (usageRecordError) console.error("luna token usage record failed", usageRecordError.message);
       return text(200, publicAnswer);
     }
 
