@@ -594,7 +594,6 @@ impl Ctx {
         self.log.update(|l| l.push(Row { id, user: false, part: part.into(), text, fx }));
         self.stream.set(None);
         self.busy.set(false);
-        self.scroll(true);
     }
 
     /// Ошибка или лимит: ответ не получен, сообщение пользователя убираем из истории.
@@ -739,7 +738,6 @@ impl Ctx {
                     shown = (shown + CHUNKS[shown % CHUNKS.len()]).min(chars.len());
                     let visible: String = chars[..shown].iter().collect();
                     self.stream.set(Some(visible));
-                    self.scroll(false);
                     gloo_timers::future::TimeoutFuture::new(60).await;
                 }
             }
